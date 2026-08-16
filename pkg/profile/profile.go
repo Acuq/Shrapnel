@@ -26,6 +26,7 @@ type Profile struct {
 	// User credentials for direct connection
 	Username    string `json:"username"`
 	Password    string `json:"password"`
+	ObfsPassword string `json:"obfs_password"` // Added for obfs support
 	
 	// Traffic statistics
 	TrafficStats TrafficStats `json:"traffic_stats"`
@@ -107,6 +108,7 @@ func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, port int, sn
 	// Generate username and password for the profile
 	username := id
 	password := generateRandomPassword()
+	obfsPassword := generateRandomPassword()
 	
 	// Create profile
 	profile := &Profile{
@@ -117,6 +119,7 @@ func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, port int, sn
 		SNI:         sni,
 		Username:    username,
 		Password:    password,
+		ObfsPassword: obfsPassword,
 		Status:      "inactive",
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),

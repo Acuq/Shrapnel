@@ -358,17 +358,23 @@ func main() {
 					needsUpdate = true
 				}
 				
+				if prof.ObfsPassword == "" {
+					prof.ObfsPassword = generatePassword()
+					needsUpdate = true
+				}
+				
 				if needsUpdate {
 					err := registry.UpdateProfile(prof.ID, func(p *profile.Profile) error {
 						p.Username = prof.Username
 						p.Password = prof.Password
+						p.ObfsPassword = prof.ObfsPassword
 						return nil
 					})
 					
 					if err == nil {
 						updatedCount++
-						fmt.Printf("Updated profile: %s (username: %s, password: %s)\n", 
-							prof.ID, prof.Username, prof.Password)
+						fmt.Printf("Updated profile: %s (username: %s, password: %s, obfs: %s)\n", 
+							prof.ID, prof.Username, prof.Password, prof.ObfsPassword)
 					}
 				}
 			}
@@ -407,7 +413,7 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 		return fmt.Errorf("failed to generate certificates: %w", err)
 	}
 
-	// Generate configuration with profile credentials
+	// Generate configuration with profile credentials (Blitz-style)
 	configData := config.ConfigData{
 		ProfileID:        id,
 		IPAddress:        ip,
@@ -417,10 +423,12 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 		KeyFile:          keyFile,
 		AuthType:         "password",
 		AuthPassword:     prof.Password, // Use profile's password
+		ObfsType:         "salamander",  // Enable obfs like Blitz
+		ObfsPassword:     prof.ObfsPassword, // Use profile's obfs password
 		MaxConnections:   prof.Config.MaxConnections,
 		CongestionControl: prof.Config.CongestionControl,
 		EnableSpeedTest:  prof.Config.EnableSpeedTest,
-		EnableMasquerade: prof.Config.EnableMasquerade,
+		EnableMasquerade: true, // Enable masquerade like Blitz
 	}
 
 	configPath := registry.GetProfileConfigPath(id)
@@ -791,8 +799,9 @@ func generateUserURI(profileID, username string, showQR, withSHA256 bool) error 
 }
 
 func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
-	// Build URI parameters - don't use obfs if not configured in config
-	uriParams := fmt.Sprintf("insecure=1&sni=%s", prof.SNI)
+	// Build URI parameters with obfs (Blitz-style) using profile's obfs password
+	uriParams := fmt.Sprintf("obfs=salamander&obfs-password=%s&insecure=1&sni=%s",
+		prof.ObfsPassword, prof.SNI)
 	
 	// Add SHA256 pin if requested
 	if withSHA256 {
@@ -817,6 +826,7 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 	fmt.Printf("IP: %s\n", prof.IPAddress)
 	fmt.Printf("Port: %d\n", prof.Port)
 	fmt.Printf("SNI: %s\n", prof.SNI)
+	fmt.Printf("Obfs Password: %s\n", prof.ObfsPassword)
 	if withSHA256 {
 		fmt.Printf("SHA256 Pin: generated\n")
 	}
@@ -1181,11 +1191,17 @@ func updateOldProfiles() {
 			needsUpdate = true
 		}
 		
+		if prof.ObfsPassword == "" {
+			prof.ObfsPassword = generatePassword()
+			needsUpdate = true
+		}
+		
 		if needsUpdate {
 			// Update profile
 			err := registry.UpdateProfile(prof.ID, func(p *profile.Profile) error {
 				p.Username = prof.Username
 				p.Password = prof.Password
+				p.ObfsPassword = prof.ObfsPassword
 				return nil
 			})
 			
