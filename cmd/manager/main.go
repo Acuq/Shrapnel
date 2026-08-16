@@ -46,6 +46,9 @@ func main() {
 	}
 	defer logger.Sync()
 
+	// Migrate from old paths if they exist
+	migrateFromOldPaths()
+
 	// Create directories
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		logger.Fatal("Failed to create config directory", zap.Error(err))
@@ -749,8 +752,9 @@ func uninstallShrapnel(force bool) error {
 		fmt.Println("This will completely remove Shrapnel from your system:")
 		fmt.Println("- Stop all Shrapnel services")
 		fmt.Println("- Remove Shrapnel binaries (shrapnel, shrapnel-manager, shrapnel-menu)")
-		fmt.Println("- Remove Shrapnel directories (/etc/shrapnel, /var/lib/shrapnel)")
+		fmt.Println("- Remove Shrapnel directories (/opt/shrapnel)")
 		fmt.Println("- Remove Shrapnel systemd services")
+		fmt.Println("- Remove symlinks from /usr/local/bin")
 		fmt.Println("- Keep Hysteria2 binary and other dependencies")
 		fmt.Println()
 		fmt.Print("Are you sure? (y/n): ")
@@ -784,36 +788,31 @@ func uninstallShrapnel(force bool) error {
 	cmd = exec.Command("systemctl", "daemon-reload")
 	cmd.Run()
 	
-	// 3. Remove Shrapnel binaries
-	fmt.Println("Removing Shrapnel binaries...")
-	binaries := []string{
-		"/usr/local/bin/shrapnel",
-		"/usr/local/bin/shrapnel-manager",
-		"/usr/local/bin/shrapnel-menu",
+	// 3. Remove Shrapnel symlinks
+	fmt.Println("Removing Shrapnel symlinks...")
+	os.Remove("/usr/local/bin/shrapnel")
+	os.Remove("/usr/local/bin/shrapnel-manager")
+	
+	// 4. Remove Shrapnel isolated directory
+	fmt.Println("Removing Shrapnel directory...")
+	if _, err := os.Stat("/opt/shrapnel"); err == nil {
+		os.RemoveAll("/opt/shrapnel")
+		fmt.Printf("  Removed: /opt/shrapnel\n")
 	}
 	
-	for _, binary := range binaries {
-		if _, err := os.Stat(binary); err == nil {
-			os.Remove(binary)
-			fmt.Printf("  Removed: %s\n", binary)
-		}
-	}
-	
-	// 4. Remove Shrapnel directories
-	fmt.Println("Removing Shrapnel directories...")
-	directories := []string{
+	// 5. Also remove old paths if they exist
+	oldPaths := []string{
 		"/etc/shrapnel",
 		"/var/lib/shrapnel",
 	}
-	
-	for _, dir := range directories {
-		if _, err := os.Stat(dir); err == nil {
-			os.RemoveAll(dir)
-			fmt.Printf("  Removed: %s\n", dir)
+	for _, path := range oldPaths {
+		if _, err := os.Stat(path); err == nil {
+			os.RemoveAll(path)
+			fmt.Printf("  Removed old path: %s\n", path)
 		}
 	}
 	
-	// 5. Reset failed units
+	// 6. Reset failed units
 	cmd = exec.Command("systemctl", "reset-failed")
 	cmd.Run()
 	
@@ -821,4 +820,34 @@ func uninstallShrapnel(force bool) error {
 	fmt.Println("Note: Hysteria2 binary and other dependencies were preserved.")
 	
 	return nil
+}
+
+func migrateFromOldPaths() {
+	oldConfigDir := "/etc/shrapnel"
+	oldDataDir := "/var/lib/shrapnel"
+	
+	// Check if old paths exist
+	if _, err := os.Stat(oldConfigDir); os.IsNotExist(err) {
+		return // No migration needed
+	}
+	
+	logger.Info("Migrating from old paths to new isolated location")
+	
+	// Create new directories
+	os.MkdirAll(configDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+	
+	// Copy config files
+	cmd := exec.Command("cp", "-r", oldConfigDir+"/*", configDir+"/")
+	cmd.Run()
+	
+	// Copy data files
+	cmd = exec.Command("cp", "-r", oldDataDir+"/*", dataDir+"/")
+	cmd.Run()
+	
+	// Remove old directories
+	os.RemoveAll(oldConfigDir)
+	os.RemoveAll(oldDataDir)
+	
+	logger.Info("Migration completed successfully")
 }
