@@ -386,12 +386,24 @@ func getProfile(registry *profile.ProfileRegistry, id string) {
 }
 
 func deleteProfile(registry *profile.ProfileRegistry, serviceManager *service.ServiceManager, id string) error {
-	// Delete service first
+	// Stop service first
+	logger.Info("Stopping service before deletion", zap.String("profile", id))
+	if err := serviceManager.StopService(id); err != nil {
+		logger.Warn("Failed to stop service, continuing with deletion", 
+			zap.String("profile", id), 
+			zap.Error(err))
+	}
+
+	// Delete service
+	logger.Info("Deleting service", zap.String("profile", id))
 	if err := serviceManager.DeleteService(id); err != nil {
-		logger.Warn("Failed to delete service", zap.String("profile", id), zap.Error(err))
+		logger.Warn("Failed to delete service, continuing with profile deletion", 
+			zap.String("profile", id), 
+			zap.Error(err))
 	}
 
 	// Delete profile
+	logger.Info("Deleting profile", zap.String("profile", id))
 	if err := registry.DeleteProfile(id); err != nil {
 		return fmt.Errorf("failed to delete profile: %w", err)
 	}

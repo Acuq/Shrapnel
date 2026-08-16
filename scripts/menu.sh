@@ -98,7 +98,8 @@ profile_menu() {
         echo -e "${GREEN}[2]${NC} List Profiles"
         echo -e "${GREEN}[3]${NC} View Profile Details"
         echo -e "${GREEN}[4]${NC} Edit Profile"
-        echo -e "${GREEN}[5]${NC} Delete Profile"
+        echo -e "${GREEN}[5]${NC} Show Profile URI"
+        echo -e "${GREEN}[6]${NC} Delete Profile"
         echo -e "${RED}[0]${NC} Back to Main Menu"
         echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
         echo -ne "${YELLOW}➜ Enter your option: ${NC}"
@@ -109,7 +110,8 @@ profile_menu() {
             2) list_profiles ;;
             3) view_profile ;;
             4) edit_profile ;;
-            5) delete_profile ;;
+            5) show_profile_uri ;;
+            6) delete_profile ;;
             0) break ;;
             *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
         esac
@@ -257,11 +259,50 @@ delete_profile() {
         return
     fi
     
+    # Stop service first if running
+    echo -e "${YELLOW}Stopping service if running...${NC}"
+    if $MANAGER_PATH service stop "$profile_id" 2>/dev/null; then
+        echo -e "${GREEN}✓ Service stopped${NC}"
+    else
+        echo -e "${YELLOW}Service was not running or failed to stop${NC}"
+    fi
+    
+    # Delete profile
     if $MANAGER_PATH profile delete "$profile_id"; then
         echo -e "${GREEN}✓ Profile deleted successfully${NC}"
     else
         echo -e "${RED}✗ Failed to delete profile${NC}"
     fi
+}
+
+# Show profile URI
+show_profile_uri() {
+    read -p "Enter Profile ID: " profile_id
+    
+    if [ -z "$profile_id" ]; then
+        echo -e "${RED}Profile ID cannot be empty${NC}"
+        return
+    fi
+    
+    # Check if profile has users
+    echo -e "${YELLOW}Available users in profile '$profile_id':${NC}"
+    $MANAGER_PATH user list "$profile_id"
+    
+    read -p "Enter username to generate URI: " username
+    
+    if [ -z "$username" ]; then
+        echo -e "${RED}Username cannot be empty${NC}"
+        return
+    fi
+    
+    read -p "Show QR code? (y/n): " show_qr
+    qr_flag=""
+    if [[ "$show_qr" =~ ^[Yy]$ ]]; then
+        qr_flag="--qr"
+    fi
+    
+    echo -e "${YELLOW}Generating URI for user '$username' in profile '$profile_id'...${NC}"
+    $MANAGER_PATH uri --profile "$profile_id" --username "$username" $qr_flag
 }
 
 # Service management menu

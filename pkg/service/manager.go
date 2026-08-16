@@ -7,12 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // ServiceManager manages systemd services for Hysteria2 profiles
 type ServiceManager struct {
 	systemdPath string
 	serviceDir   string
+	logger      *zap.Logger
 }
 
 // NewServiceManager creates a new service manager
@@ -22,9 +25,15 @@ func NewServiceManager() (*ServiceManager, error) {
 		return nil, fmt.Errorf("systemd not found: %w", err)
 	}
 	
+	logger, err := zap.NewProduction()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize logger: %w", err)
+	}
+	
 	return &ServiceManager{
 		systemdPath: "/usr/bin/systemctl",
 		serviceDir:  "/etc/systemd/system",
+		logger:      logger,
 	}, nil
 }
 
@@ -64,6 +73,11 @@ func (m *ServiceManager) CreateService(profileID, configPath, binaryPath string)
 func (m *ServiceManager) StartService(profileID string) error {
 	serviceName := m.getServiceName(profileID)
 	
+	// Enable service first
+	if err := m.EnableService(profileID); err != nil {
+		logger.Warn("Failed to enable service", zap.Error(err))
+	}
+	
 	cmd := exec.Command(m.systemdPath, "start", serviceName)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to start service: %w, output: %s", err, string(output))
@@ -79,8 +93,25 @@ func (m *ServiceManager) StartService(profileID string) error {
 func (m *ServiceManager) StopService(profileID string) error {
 	serviceName := m.getServiceName(profileID)
 	
+	// Check if service exists and is loaded
+	status, err := m.GetServiceStatus(profileID)
+	if err != nil || status.Status == "unknown" {
+		// Service doesn't exist or isn't loaded, consider it as stopped
+		return nil
+	}
+	
+	// Only try to stop if it's active
+	if status.Status != "active" {
+		return nil
+	}
+	
 	cmd := exec.Command(m.systemdPath, "stop", serviceName)
-	if output, err := cmd.CombinedOutput(); err != nil {
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// If error is "Unit not loaded", service is already stopped
+		if strings.Contains(string(output), "Unit not loaded") {
+			return nil
+		}
 		return fmt.Errorf("failed to stop service: %w, output: %s", err, string(output))
 	}
 	
