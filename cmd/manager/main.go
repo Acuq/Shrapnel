@@ -740,12 +740,8 @@ func generateUserURI(profileID, username string, showQR, withSHA256 bool) error 
 	profilePort := 443         // Default port, should come from profile
 	profileSNI := "bts.com"         // Default SNI, should come from profile
 	
-	// Generate random obfs password
-	obfsPassword := generatePassword()
-	
-	// Build URI parameters
-	uriParams := fmt.Sprintf("obfs=salamander&obfs-password=%s&insecure=1&sni=%s",
-		obfsPassword, profileSNI)
+	// Build URI parameters - no obfs by default
+	uriParams := fmt.Sprintf("insecure=1&sni=%s", profileSNI)
 	
 	// Add SHA256 pin if requested
 	if withSHA256 {
@@ -767,7 +763,6 @@ func generateUserURI(profileID, username string, showQR, withSHA256 bool) error 
 	fmt.Printf("Profile: %s\n", profileID)
 	fmt.Printf("Username: %s\n", user.Username)
 	fmt.Printf("Password: %s\n", user.Password)
-	fmt.Printf("Obfs Password: %s\n", obfsPassword)
 	if withSHA256 {
 		fmt.Printf("SHA256 Pin: generated\n")
 	}
@@ -796,12 +791,8 @@ func generateUserURI(profileID, username string, showQR, withSHA256 bool) error 
 }
 
 func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
-	// Generate random obfs password
-	obfsPassword := generatePassword()
-	
-	// Build URI parameters
-	uriParams := fmt.Sprintf("obfs=salamander&obfs-password=%s&insecure=1&sni=%s",
-		obfsPassword, prof.SNI)
+	// Build URI parameters - don't use obfs if not configured in config
+	uriParams := fmt.Sprintf("insecure=1&sni=%s", prof.SNI)
 	
 	// Add SHA256 pin if requested
 	if withSHA256 {
@@ -826,7 +817,6 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 	fmt.Printf("IP: %s\n", prof.IPAddress)
 	fmt.Printf("Port: %d\n", prof.Port)
 	fmt.Printf("SNI: %s\n", prof.SNI)
-	fmt.Printf("Obfs Password: %s\n", obfsPassword)
 	if withSHA256 {
 		fmt.Printf("SHA256 Pin: generated\n")
 	}
