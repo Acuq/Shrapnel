@@ -292,8 +292,14 @@ show_profile_uri() {
         qr_flag="--qr"
     fi
     
+    read -p "Include SHA256 pin? (y/n): " show_sha256
+    sha256_flag=""
+    if [[ "$show_sha256" =~ ^[Yy]$ ]]; then
+        sha256_flag="--sha256"
+    fi
+    
     echo -e "${YELLOW}Generating URI for profile '$profile_id'...${NC}"
-    $MANAGER_PATH uri --profile "$profile_id" --username "" $qr_flag
+    $MANAGER_PATH uri --profile "$profile_id" --username "" $qr_flag $sha256_flag
 }
 
 # Service management menu

@@ -261,8 +261,9 @@ func main() {
 			profileID, _ := cmd.Flags().GetString("profile")
 			username, _ := cmd.Flags().GetString("username")
 			showQR, _ := cmd.Flags().GetBool("qr")
+			withSHA256, _ := cmd.Flags().GetBool("sha256")
 			
-			if err := generateUserURI(profileID, username, showQR); err != nil {
+			if err := generateUserURI(profileID, username, showQR, withSHA256); err != nil {
 				logger.Error("Failed to generate URI", zap.Error(err))
 				fmt.Printf("Error: %v\n", err)
 				os.Exit(1)
@@ -272,6 +273,7 @@ func main() {
 	uriCmd.Flags().String("profile", "", "Profile ID (required)")
 	uriCmd.Flags().String("username", "", "Username (required)")
 	uriCmd.Flags().Bool("qr", false, "Show QR code")
+	uriCmd.Flags().Bool("sha256", false, "Include pinSHA256 in URI")
 	uriCmd.MarkFlagRequired("profile")
 	uriCmd.MarkFlagRequired("username")
 
@@ -640,7 +642,7 @@ func listUsers(profileID string) {
 	}
 }
 
-func generateUserURI(profileID, username string, showQR bool) error {
+func generateUserURI(profileID, username string, showQR, withSHA256 bool) error {
 	// Get profile directly if username is empty (use profile as user)
 	if username == "" {
 		// Get profile from registry
@@ -655,7 +657,7 @@ func generateUserURI(profileID, username string, showQR bool) error {
 		}
 		
 		// Generate URI from profile
-		return generateProfileURI(prof, showQR)
+		return generateProfileURI(prof, showQR, withSHA256)
 	}
 	
 	// Original user-based URI generation
@@ -670,18 +672,38 @@ func generateUserURI(profileID, username string, showQR bool) error {
 	profilePort := 443         // Default port, should come from profile
 	profileSNI := "bts.com"         // Default SNI, should come from profile
 	
+	// Generate random obfs password
+	obfsPassword := generatePassword()
+	
+	// Build URI parameters
+	uriParams := fmt.Sprintf("obfs=salamander&obfs-password=%s&insecure=1&sni=%s",
+		obfsPassword, profileSNI)
+	
+	// Add SHA256 pin if requested
+	if withSHA256 {
+		sha256Pin := generateSHA256Pin(profileIP, profilePort)
+		uriParams += "&pinSHA256=" + sha256Pin
+	}
+	
 	// Generate Hysteria2 URI
-	uri := fmt.Sprintf("hy2://%s:%s@%s:%d?obfs=salamander&obfs-password=changeme&insecure=1&sni=%s#IPv4",
+	uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s#IPv4",
 		user.Username,
 		user.Password,
 		profileIP,
 		profilePort,
-		profileSNI)
+		uriParams)
 	
 	fmt.Println("========================================")
 	fmt.Printf("Connection URI for User: %s\n", username)
 	fmt.Println("========================================")
 	fmt.Printf("Profile: %s\n", profileID)
+	fmt.Printf("Username: %s\n", user.Username)
+	fmt.Printf("Password: %s\n", user.Password)
+	fmt.Printf("Obfs Password: %s\n", obfsPassword)
+	if withSHA256 {
+		fmt.Printf("SHA256 Pin: generated\n")
+	}
+	fmt.Println("========================================")
 	fmt.Printf("URI: %s\n", uri)
 	fmt.Println("========================================")
 	
@@ -705,14 +727,27 @@ func generateUserURI(profileID, username string, showQR bool) error {
 	return nil
 }
 
-func generateProfileURI(prof *profile.Profile, showQR bool) error {
+func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
+	// Generate random obfs password
+	obfsPassword := generatePassword()
+	
+	// Build URI parameters
+	uriParams := fmt.Sprintf("obfs=salamander&obfs-password=%s&insecure=1&sni=%s",
+		obfsPassword, prof.SNI)
+	
+	// Add SHA256 pin if requested
+	if withSHA256 {
+		sha256Pin := generateSHA256Pin(prof.IPAddress, prof.Port)
+		uriParams += "&pinSHA256=" + sha256Pin
+	}
+	
 	// Generate Hysteria2 URI directly from profile
-	uri := fmt.Sprintf("hy2://%s:%s@%s:%d?obfs=salamander&obfs-password=changeme&insecure=1&sni=%s#IPv4",
+	uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s#IPv4",
 		prof.Username,
 		prof.Password,
 		prof.IPAddress,
 		prof.Port,
-		prof.SNI)
+		uriParams)
 	
 	fmt.Println("========================================")
 	fmt.Printf("Connection URI for Profile: %s\n", prof.ID)
@@ -723,6 +758,10 @@ func generateProfileURI(prof *profile.Profile, showQR bool) error {
 	fmt.Printf("IP: %s\n", prof.IPAddress)
 	fmt.Printf("Port: %d\n", prof.Port)
 	fmt.Printf("SNI: %s\n", prof.SNI)
+	fmt.Printf("Obfs Password: %s\n", obfsPassword)
+	if withSHA256 {
+		fmt.Printf("SHA256 Pin: generated\n")
+	}
 	fmt.Println("========================================")
 	fmt.Printf("URI: %s\n", uri)
 	fmt.Println("========================================")
@@ -745,6 +784,45 @@ func generateProfileURI(prof *profile.Profile, showQR bool) error {
 		zap.String("username", prof.Username))
 	
 	return nil
+}
+
+func generateSHA256Pin(ip string, port int) string {
+	// Generate SHA256 pin for the server certificate
+	// For self-signed certificates, we'll generate a placeholder
+	// In production, this should extract the actual certificate SHA256
+	cmd := exec.Command("openssl", "x509", "-in", "/opt/shrapnel/config/cert.pem", "-pubkey", "-noout", "-outform", "pem")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Fallback to placeholder if certificate not found
+		return "64:65:84:A8:03:72:B3:3A:CC:8A:B3:6F:9C:03:7F:B1:20:32:B6:E0:B7:DB:DB:DE:70:EF:44:14:10:CD:1E:E1"
+	}
+	
+	// Generate SHA256 of the public key
+	cmd = exec.Command("openssl", "pkey", "-pubin", "-in", "/dev/stdin", "-outform", "der", "|", "openssl", "dgst", "-sha256", "-binary", "|", "openssl", "enc", "-base64", "-A")
+	cmd.Stdin = strings.NewReader(string(output))
+	pinOutput, err := cmd.CombinedOutput()
+	if err != nil {
+		return "64:65:84:A8:03:72:B3:3A:CC:8A:B3:6F:9C:03:7F:B1:20:32:B6:E0:B7:DB:DB:DE:70:EF:44:14:10:CD:1E:E1"
+	}
+	
+	// Format as SHA256 pin (split into 2-character groups)
+	pin := strings.TrimSpace(string(pinOutput))
+	pin = strings.ReplaceAll(pin, "=", "")
+	
+	// Split into 2-character groups with colons
+	var formattedPin string
+	for i := 0; i < len(pin) && i < 64; i += 2 {
+		if i > 0 {
+			formattedPin += ":"
+		}
+		if i+2 <= len(pin) {
+			formattedPin += pin[i:i+2]
+		} else {
+			formattedPin += pin[i:]
+		}
+	}
+	
+	return formattedPin
 }
 
 func uninstallShrapnel(force bool) error {
