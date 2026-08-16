@@ -314,6 +314,21 @@ func main() {
 	}
 	uninstallCmd.Flags().Bool("force", false, "Force uninstall without confirmation")
 
+	// Diagnostics command
+	diagCmd := &cobra.Command{
+		Use:   "diagnose",
+		Short: "Run diagnostics on Hysteria2 installation",
+		Run: func(cmd *cobra.Command, args []string) {
+			profileID, _ := cmd.Flags().GetString("profile")
+			if err := runDiagnostics(profileID); err != nil {
+				logger.Error("Diagnostics failed", zap.Error(err))
+				fmt.Printf("Error: %v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+	diagCmd.Flags().String("profile", "", "Profile ID to diagnose")
+
 	// Update profiles command
 	updateProfilesCmd := &cobra.Command{
 		Use:   "update-profiles",
