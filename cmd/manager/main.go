@@ -311,7 +311,7 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 		return fmt.Errorf("failed to generate certificates: %w", err)
 	}
 
-	// Generate configuration
+	// Generate configuration with profile credentials
 	configData := config.ConfigData{
 		ProfileID:        id,
 		IPAddress:        ip,
@@ -320,7 +320,7 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 		CertFile:         certFile,
 		KeyFile:          keyFile,
 		AuthType:         "password",
-		AuthPassword:     generatePassword(),
+		AuthPassword:     prof.Password, // Use profile's password
 		MaxConnections:   prof.Config.MaxConnections,
 		CongestionControl: prof.Config.CongestionControl,
 		EnableSpeedTest:  prof.Config.EnableSpeedTest,
@@ -340,7 +340,9 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 	logger.Info("Profile created successfully", 
 		zap.String("id", id), 
 		zap.String("ip", ip), 
-		zap.Int("port", port))
+		zap.Int("port", port),
+		zap.String("username", prof.Username),
+		zap.String("password", prof.Password))
 
 	return nil
 }
@@ -612,7 +614,24 @@ func listUsers(profileID string) {
 }
 
 func generateUserURI(profileID, username string, showQR bool) error {
-	// Get user
+	// Get profile directly if username is empty (use profile as user)
+	if username == "" {
+		// Get profile from registry
+		registry, err := profile.NewProfileRegistry(configDir, dataDir)
+		if err != nil {
+			return fmt.Errorf("failed to initialize registry: %w", err)
+		}
+		
+		prof, err := registry.GetProfile(profileID)
+		if err != nil {
+			return fmt.Errorf("profile not found: %s", profileID)
+		}
+		
+		// Generate URI from profile
+		return generateProfileURI(prof, showQR)
+	}
+	
+	// Original user-based URI generation
 	key := profileID + ":" + username
 	user, exists := usersDB[key]
 	if !exists {
@@ -620,7 +639,6 @@ func generateUserURI(profileID, username string, showQR bool) error {
 	}
 	
 	// Get profile details (simplified for now)
-	// In production, we would get this from the profile registry
 	profileIP := "144.31.132.207" // Default IP, should come from profile
 	profilePort := 443         // Default port, should come from profile
 	profileSNI := "bts.com"         // Default SNI, should come from profile
@@ -656,6 +674,48 @@ func generateUserURI(profileID, username string, showQR bool) error {
 	logger.Info("User URI generated successfully",
 		zap.String("username", username),
 		zap.String("profile", profileID))
+	
+	return nil
+}
+
+func generateProfileURI(prof *profile.Profile, showQR bool) error {
+	// Generate Hysteria2 URI directly from profile
+	uri := fmt.Sprintf("hy2://%s:%s@%s:%d?obfs=salamander&obfs-password=changeme&insecure=1&sni=%s#IPv4",
+		prof.Username,
+		prof.Password,
+		prof.IPAddress,
+		prof.Port,
+		prof.SNI)
+	
+	fmt.Println("========================================")
+	fmt.Printf("Connection URI for Profile: %s\n", prof.ID)
+	fmt.Println("========================================")
+	fmt.Printf("Name: %s\n", prof.Name)
+	fmt.Printf("Username: %s\n", prof.Username)
+	fmt.Printf("Password: %s\n", prof.Password)
+	fmt.Printf("IP: %s\n", prof.IPAddress)
+	fmt.Printf("Port: %d\n", prof.Port)
+	fmt.Printf("SNI: %s\n", prof.SNI)
+	fmt.Println("========================================")
+	fmt.Printf("URI: %s\n", uri)
+	fmt.Println("========================================")
+	
+	if showQR {
+		// Generate QR code using qrencode
+		cmd := exec.Command("qrencode", "-t", "ANSIUTF8", uri)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			fmt.Printf("Note: QR code generation requires qrencode: %v\n", err)
+			fmt.Println("Install with: apt-get install qrencode")
+		} else {
+			fmt.Println("QR Code:")
+			fmt.Println(string(output))
+		}
+	}
+	
+	logger.Info("Profile URI generated successfully",
+		zap.String("profile", prof.ID),
+		zap.String("username", prof.Username))
 	
 	return nil
 }

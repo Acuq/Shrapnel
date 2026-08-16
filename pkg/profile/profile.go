@@ -21,6 +21,10 @@ type Profile struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	
+	// User credentials for direct connection
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	
 	// Traffic statistics
 	TrafficStats TrafficStats `json:"traffic_stats"`
 	

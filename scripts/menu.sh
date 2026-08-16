@@ -284,25 +284,14 @@ show_profile_uri() {
         return
     fi
     
-    # Check if profile has users
-    echo -e "${YELLOW}Available users in profile '$profile_id':${NC}"
-    $MANAGER_PATH user list "$profile_id"
-    
-    read -p "Enter username to generate URI: " username
-    
-    if [ -z "$username" ]; then
-        echo -e "${RED}Username cannot be empty${NC}"
-        return
-    fi
-    
     read -p "Show QR code? (y/n): " show_qr
     qr_flag=""
     if [[ "$show_qr" =~ ^[Yy]$ ]]; then
         qr_flag="--qr"
     fi
     
-    echo -e "${YELLOW}Generating URI for user '$username' in profile '$profile_id'...${NC}"
-    $MANAGER_PATH uri --profile "$profile_id" --username "$username" $qr_flag
+    echo -e "${YELLOW}Generating URI for profile '$profile_id'...${NC}"
+    $MANAGER_PATH uri --profile "$profile_id" --username "" $qr_flag
 }
 
 # Service management menu
