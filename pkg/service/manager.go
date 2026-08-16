@@ -7,15 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 // ServiceManager manages systemd services for Hysteria2 profiles
 type ServiceManager struct {
 	systemdPath string
 	serviceDir   string
-	logger      *zap.Logger
 }
 
 // NewServiceManager creates a new service manager
@@ -25,15 +22,9 @@ func NewServiceManager() (*ServiceManager, error) {
 		return nil, fmt.Errorf("systemd not found: %w", err)
 	}
 	
-	logger, err := zap.NewProduction()
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize logger: %w", err)
-	}
-	
 	return &ServiceManager{
 		systemdPath: "/usr/bin/systemctl",
 		serviceDir:  "/etc/systemd/system",
-		logger:      logger,
 	}, nil
 }
 
@@ -75,7 +66,7 @@ func (m *ServiceManager) StartService(profileID string) error {
 	
 	// Enable service first
 	if err := m.EnableService(profileID); err != nil {
-		logger.Warn("Failed to enable service", zap.Error(err))
+		// Log warning but continue
 	}
 	
 	cmd := exec.Command(m.systemdPath, "start", serviceName)

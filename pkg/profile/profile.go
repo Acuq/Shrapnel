@@ -200,7 +200,7 @@ func (r *ProfileRegistry) DeleteProfile(id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	
-	profile, exists := r.profiles[id]
+	_, exists := r.profiles[id]
 	if !exists {
 		return fmt.Errorf("profile not found: %s", id)
 	}
