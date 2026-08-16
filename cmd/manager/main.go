@@ -98,6 +98,12 @@ func main() {
 			port, _ := cmd.Flags().GetInt("port")
 			sni, _ := cmd.Flags().GetString("sni")
 			enableMasquerade, _ := cmd.Flags().GetBool("masquerade")
+			noMasquerade, _ := cmd.Flags().GetBool("no-masquerade")
+			
+			// If --no-masquerade is set, disable masquerade
+			if noMasquerade {
+				enableMasquerade = false
+			}
 			
 			if err := createProfile(registry, configGenerator, serviceManager, id, name, ip, port, sni, enableMasquerade); err != nil {
 				logger.Error("Failed to create profile", zap.Error(err))
@@ -113,7 +119,8 @@ func main() {
 	createCmd.Flags().String("ip", "", "IP address (required)")
 	createCmd.Flags().Int("port", 443, "Port number")
 	createCmd.Flags().String("sni", "bts.com", "SNI")
-	createCmd.Flags().Bool("masquerade", true, "Enable masquerade (default: true)")
+	createCmd.Flags().Bool("masquerade", true, "Enable masquerade")
+	createCmd.Flags().Bool("no-masquerade", false, "Disable masquerade")
 	createCmd.MarkFlagRequired("id")
 	createCmd.MarkFlagRequired("name")
 	createCmd.MarkFlagRequired("ip")
