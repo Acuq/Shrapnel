@@ -567,12 +567,12 @@ func generateSelfSignedCert(certFile, keyFile, sni string) error {
 }
 
 func generatePassword() string {
-	// Generate random password using OpenSSL
-	cmd := exec.Command("openssl", "rand", "-base64", "12")
+	// Generate longer random password using OpenSSL (32 chars for better security)
+	cmd := exec.Command("openssl", "rand", "-base64", "32")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// Fallback to simple password if openssl fails
-		return "shrapnel123"
+		// Fallback to longer password if openssl fails
+		return "shrapnel" + fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 	
 	// Clean up the output (remove newlines and special chars)
@@ -581,8 +581,9 @@ func generatePassword() string {
 	password = strings.ReplaceAll(password, "+", "")
 	password = strings.ReplaceAll(password, "/", "")
 	
-	if len(password) < 8 {
-		password = "shrapnel123"
+	if len(password) < 24 {
+		// Ensure minimum length
+		password = "shrapnel" + fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 	
 	return password
@@ -928,4 +929,53 @@ func migrateFromOldPaths() {
 	os.RemoveAll(oldDataDir)
 	
 	logger.Info("Migration completed successfully")
+	
+	// Update old profiles with missing fields
+	updateOldProfiles()
+}
+
+func updateOldProfiles() {
+	registry, err := profile.NewProfileRegistry(configDir, dataDir)
+	if err != nil {
+		logger.Warn("Failed to initialize registry for profile update", zap.Error(err))
+		return
+	}
+	
+	profiles := registry.ListProfiles()
+	updatedCount := 0
+	
+	for _, prof := range profiles {
+		needsUpdate := false
+		
+		// Check if profile has username and password
+		if prof.Username == "" {
+			prof.Username = prof.ID // Use profile ID as username
+			needsUpdate = true
+		}
+		
+		if prof.Password == "" {
+			prof.Password = generatePassword()
+			needsUpdate = true
+		}
+		
+		if needsUpdate {
+			// Update profile
+			err := registry.UpdateProfile(prof.ID, func(p *profile.Profile) error {
+				p.Username = prof.Username
+				p.Password = prof.Password
+				return nil
+			})
+			
+			if err == nil {
+				updatedCount++
+				logger.Info("Updated old profile with credentials", 
+					zap.String("id", prof.ID),
+					zap.String("username", prof.Username))
+			}
+		}
+	}
+	
+	if updatedCount > 0 {
+		logger.Info("Updated old profiles with credentials", zap.Int("count", updatedCount))
+	}
 }
