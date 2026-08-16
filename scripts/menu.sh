@@ -697,7 +697,7 @@ change_profile_sni() {
 toggle_masquerade() {
     local profile_id=$1
     echo -e "${YELLOW}Toggle masquerade for profile: $profile_id${NC}"
-    echo "Implementation pending - requires profile update functionality"
+    $MANAGER_PATH profile edit "$profile_id" --masquerade
 }
 
 toggle_speedtest() {

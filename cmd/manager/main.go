@@ -96,8 +96,9 @@ func main() {
 			ip, _ := cmd.Flags().GetString("ip")
 			port, _ := cmd.Flags().GetInt("port")
 			sni, _ := cmd.Flags().GetString("sni")
+			enableMasquerade, _ := cmd.Flags().GetBool("masquerade")
 			
-			if err := createProfile(registry, configGenerator, serviceManager, id, name, ip, port, sni); err != nil {
+			if err := createProfile(registry, configGenerator, serviceManager, id, name, ip, port, sni, enableMasquerade); err != nil {
 				logger.Error("Failed to create profile", zap.Error(err))
 				fmt.Printf("Error: %v\n", err)
 				os.Exit(1)
@@ -111,6 +112,7 @@ func main() {
 	createCmd.Flags().String("ip", "", "IP address (required)")
 	createCmd.Flags().Int("port", 443, "Port number")
 	createCmd.Flags().String("sni", "bts.com", "SNI")
+	createCmd.Flags().Bool("masquerade", true, "Enable masquerade (default: true)")
 	createCmd.MarkFlagRequired("id")
 	createCmd.MarkFlagRequired("name")
 	createCmd.MarkFlagRequired("ip")
@@ -123,6 +125,24 @@ func main() {
 			listProfiles(registry)
 		},
 	}
+
+	// Edit profile command
+	editCmd := &cobra.Command{
+		Use:   "edit",
+		Short: "Edit a profile",
+		Run: func(cmd *cobra.Command, args []string) {
+			id := args[0]
+			masquerade, _ := cmd.Flags().GetBool("masquerade")
+			
+			if err := editProfile(registry, generator, serviceManager, id, masquerade); err != nil {
+				logger.Error("Failed to edit profile", zap.Error(err))
+				fmt.Printf("Error: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("Profile '%s' edited successfully\n", id)
+		},
+	}
+	editCmd.Flags().Bool("masquerade", false, "Toggle masquerade on/off")
 
 	// Get profile command
 	getCmd := &cobra.Command{
@@ -284,7 +304,7 @@ func main() {
 	rootCmd.AddCommand(uriCmd)
 
 	// Add commands to profile
-	profileCmd.AddCommand(createCmd, listCmd, getCmd, deleteCmd)
+	profileCmd.AddCommand(createCmd, listCmd, getCmd, editCmd, deleteCmd)
 
 	// Add commands to service
 	serviceCmd.AddCommand(startCmd, stopCmd, restartCmd, statusCmd)
@@ -398,7 +418,7 @@ func main() {
 	}
 }
 
-func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGenerator, serviceManager *service.ServiceManager, id, name, ip string, port int, sni string) error {
+func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGenerator, serviceManager *service.ServiceManager, id, name, ip string, port int, sni string, enableMasquerade bool) error {
 	// Create profile
 	prof, err := registry.CreateProfile(id, name, ip, port, sni)
 	if err != nil {
@@ -428,7 +448,7 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 		MaxConnections:   prof.Config.MaxConnections,
 		CongestionControl: prof.Config.CongestionControl,
 		EnableSpeedTest:  prof.Config.EnableSpeedTest,
-		EnableMasquerade: true, // Enable masquerade like Blitz
+		EnableMasquerade: enableMasquerade, // Use the parameter
 	}
 
 	configPath := registry.GetProfileConfigPath(id)
@@ -448,6 +468,65 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 		zap.String("username", prof.Username),
 		zap.String("password", prof.Password))
 
+	return nil
+}
+
+func editProfile(registry *profile.ProfileRegistry, generator *config.ConfigGenerator, serviceManager *service.ServiceManager, id string, toggleMasquerade bool) error {
+	// Get existing profile
+	prof, err := registry.GetProfile(id)
+	if err != nil {
+		return fmt.Errorf("profile not found: %s", id)
+	}
+	
+	// Update masquerade if requested
+	if toggleMasquerade {
+		prof.Config.EnableMasquerade = !prof.Config.EnableMasquerade
+	}
+	
+	// Regenerate configuration
+	certFile := filepath.Join(registry.GetProfileDirectory(id), "cert.pem")
+	keyFile := filepath.Join(registry.GetProfileDirectory(id), "key.pem")
+	
+	configData := config.ConfigData{
+		ProfileID:        id,
+		IPAddress:        prof.IPAddress,
+		Port:             prof.Port,
+		SNI:              prof.SNI,
+		CertFile:         certFile,
+		KeyFile:          keyFile,
+		AuthType:         "password",
+		AuthPassword:     prof.Password,
+		ObfsType:         "salamander",
+		ObfsPassword:     prof.ObfsPassword,
+		MaxConnections:   prof.Config.MaxConnections,
+		CongestionControl: prof.Config.CongestionControl,
+		EnableSpeedTest:  prof.Config.EnableSpeedTest,
+		EnableMasquerade: prof.Config.EnableMasquerade,
+	}
+	
+	configPath := registry.GetProfileConfigPath(id)
+	if err := generator.GenerateConfig(configData, configPath); err != nil {
+		return fmt.Errorf("failed to regenerate config: %w", err)
+	}
+	
+	// Update profile
+	err = registry.UpdateProfile(id, func(p *profile.Profile) error {
+		p.Config.EnableMasquerade = prof.Config.EnableMasquerade
+		p.UpdatedAt = time.Now()
+		return nil
+	})
+	
+	if err != nil {
+		return fmt.Errorf("failed to update profile: %w", err)
+	}
+	
+	// Restart service if active
+	serviceManager.RestartService(id)
+	
+	logger.Info("Profile edited successfully",
+		zap.String("id", id),
+		zap.Bool("masquerade", prof.Config.EnableMasquerade))
+	
 	return nil
 }
 
