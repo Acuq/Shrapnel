@@ -44,13 +44,13 @@ echo -e "${YELLOW}Installing dependencies...${NC}"
 case $OS in
     ubuntu|debian)
         apt-get update
-        apt-get install -y build-essential git wget curl systemd sqlite3
+        apt-get install -y build-essential git wget curl systemd sqlite3 qrencode
         ;;
     centos|rhel|fedora)
-        yum install -y git wget curl systemd sqlite
+        yum install -y git wget curl systemd sqlite qrencode
         ;;
     arch|manjaro)
-        pacman -S --noconfirm git wget curl systemd sqlite
+        pacman -S --noconfirm git wget curl systemd sqlite qrencode
         ;;
     *)
         echo -e "${RED}Unsupported OS: $OS${NC}"

@@ -15,12 +15,24 @@ import (
 	"github.com/Acuq/shrapnel/pkg/service"
 )
 
+// User represents a user in a profile
+type User struct {
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+	ProfileID    string `json:"profile_id"`
+	TrafficLimit int64  `json:"traffic_limit"`
+	UploadBytes  int64  `json:"upload_bytes"`
+	DownloadBytes int64 `json:"download_bytes"`
+	CreatedAt    string `json:"created_at"`
+}
+
 var (
 	configDir = "/etc/shrapnel"
 	dataDir   = "/var/lib/shrapnel"
 	binaryPath = "/usr/local/bin/hysteria"
 	
 	logger *zap.Logger
+	usersDB = map[string]User{} // Simple in-memory user storage
 )
 
 func main() {
@@ -198,14 +210,84 @@ func main() {
 		},
 	}
 
+	// User commands
+	userCmd := &cobra.Command{
+		Use:   "user",
+		Short: "User management commands",
+	}
+
+	// Add user command
+	addUserCmd := &cobra.Command{
+		Use:   "add",
+		Short: "Add user to profile",
+		Run: func(cmd *cobra.Command, args []string) {
+			id, _ := cmd.Flags().GetString("profile")
+			username, _ := cmd.Flags().GetString("username")
+			trafficLimit, _ := cmd.Flags().GetInt64("traffic-limit")
+			
+			if err := addUser(id, username, trafficLimit); err != nil {
+				logger.Error("Failed to add user", zap.Error(err))
+				fmt.Printf("Error: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("User '%s' added successfully to profile '%s'\n", username, id)
+		},
+	}
+	addUserCmd.Flags().String("profile", "", "Profile ID (required)")
+	addUserCmd.Flags().String("username", "", "Username (required)")
+	addUserCmd.Flags().Int64("traffic-limit", 0, "Traffic limit in GB (0 for unlimited)")
+	addUserCmd.MarkFlagRequired("profile")
+	addUserCmd.MarkFlagRequired("username")
+
+	// List users command
+	listUsersCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List users in profile",
+		Run: func(cmd *cobra.Command, args []string) {
+			id := args[0]
+			listUsers(id)
+		},
+	}
+
+	// Generate URI command
+	uriCmd := &cobra.Command{
+		Use:   "uri",
+		Short: "Generate connection URI for user",
+		Run: func(cmd *cobra.Command, args []string) {
+			profileID, _ := cmd.Flags().GetString("profile")
+			username, _ := cmd.Flags().GetString("username")
+			showQR, _ := cmd.Flags().GetBool("qr")
+			
+			if err := generateUserURI(profileID, username, showQR); err != nil {
+				logger.Error("Failed to generate URI", zap.Error(err))
+				fmt.Printf("Error: %v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+	uriCmd.Flags().String("profile", "", "Profile ID (required)")
+	uriCmd.Flags().String("username", "", "Username (required)")
+	uriCmd.Flags().Bool("qr", false, "Show QR code")
+	uriCmd.MarkFlagRequired("profile")
+	uriCmd.MarkFlagRequired("username")
+
+	// Add commands to user
+	userCmd.AddCommand(addUserCmd, listUsersCmd)
+
+	// Add URI command to root
+	rootCmd.AddCommand(uriCmd)
+
 	// Add commands to profile
 	profileCmd.AddCommand(createCmd, listCmd, getCmd, deleteCmd)
 
 	// Add commands to service
 	serviceCmd.AddCommand(startCmd, stopCmd, restartCmd, statusCmd)
 
-	// Add to root
-	rootCmd.AddCommand(profileCmd, serviceCmd)
+	// Add commands to user
+	userCmd.AddCommand(addUserCmd, listUsersCmd)
+
+	// Add commands to root
+	rootCmd.AddCommand(profileCmd, serviceCmd, userCmd, uriCmd)
 
 	// Execute
 	if err := rootCmd.Execute(); err != nil {
@@ -452,4 +534,107 @@ func generatePassword() string {
 	}
 	
 	return password
+}
+
+func addUser(profileID, username string, trafficLimit int64) error {
+	// Validate profile exists
+	// Note: In production, we would check if profile exists via registry
+	
+	// Generate password
+	password := generatePassword()
+	
+	// Create user
+	user := User{
+		Username:     username,
+		Password:     password,
+		ProfileID:    profileID,
+		TrafficLimit: trafficLimit * 1024 * 1024 * 1024, // Convert GB to bytes
+		UploadBytes:   0,
+		DownloadBytes: 0,
+		CreatedAt:    time.Now().Format("2006-01-02"),
+	}
+	
+	// Store user (in-memory for now)
+	key := profileID + ":" + username
+	usersDB[key] = user
+	
+	logger.Info("User added successfully", 
+		zap.String("username", username),
+		zap.String("profile", profileID),
+		zap.Int64("traffic_limit_gb", trafficLimit))
+	
+	return nil
+}
+
+func listUsers(profileID string) {
+	fmt.Printf("Users in profile: %s\n", profileID)
+	fmt.Println("Username\tPassword\tTraffic Limit(GB)\tUpload\tDownload")
+	fmt.Println("--------\t--------\t----------------\t------\t--------")
+	
+	count := 0
+	for key, user := range usersDB {
+		if strings.HasPrefix(key, profileID+":") {
+			trafficLimitGB := user.TrafficLimit / (1024 * 1024 * 1024)
+			fmt.Printf("%s\t%s\t%d\t%d\t%d\n", 
+				user.Username, 
+				user.Password, 
+				trafficLimitGB,
+				user.UploadBytes, 
+				user.DownloadBytes)
+			count++
+		}
+	}
+	
+	if count == 0 {
+		fmt.Println("No users found in this profile")
+	}
+}
+
+func generateUserURI(profileID, username string, showQR bool) error {
+	// Get user
+	key := profileID + ":" + username
+	user, exists := usersDB[key]
+	if !exists {
+		return fmt.Errorf("user not found: %s in profile: %s", username, profileID)
+	}
+	
+	// Get profile details (simplified for now)
+	// In production, we would get this from the profile registry
+	profileIP := "144.31.132.207" // Default IP, should come from profile
+	profilePort := 443         // Default port, should come from profile
+	profileSNI := "bts.com"         // Default SNI, should come from profile
+	
+	// Generate Hysteria2 URI
+	uri := fmt.Sprintf("hy2://%s:%s@%s:%d?obfs=salamander&obfs-password=changeme&insecure=1&sni=%s#IPv4",
+		user.Username,
+		user.Password,
+		profileIP,
+		profilePort,
+		profileSNI)
+	
+	fmt.Println("========================================")
+	fmt.Printf("Connection URI for User: %s\n", username)
+	fmt.Println("========================================")
+	fmt.Printf("Profile: %s\n", profileID)
+	fmt.Printf("URI: %s\n", uri)
+	fmt.Println("========================================")
+	
+	if showQR {
+		// Generate QR code using qrencode
+		cmd := exec.Command("qrencode", "-t", "ANSIUTF8", uri)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			fmt.Printf("Note: QR code generation requires qrencode: %v\n", err)
+			fmt.Println("Install with: apt-get install qrencode")
+		} else {
+			fmt.Println("QR Code:")
+			fmt.Println(string(output))
+		}
+	}
+	
+	logger.Info("User URI generated successfully",
+		zap.String("username", username),
+		zap.String("profile", profileID))
+	
+	return nil
 }
