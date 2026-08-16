@@ -107,6 +107,7 @@ echo -e "${GREEN}✓ Manager installed${NC}"
 
 # Install console panel
 echo -e "${YELLOW}Installing console panel...${NC}"
+# Force overwrite to ensure latest version
 cp -f "$PROJECT_DIR/scripts/menu.sh" "$SCRIPT_DIR/shrapnel-menu"
 chmod +x "$SCRIPT_DIR/shrapnel-menu"
 echo -e "${GREEN}✓ Console panel installed${NC}"
