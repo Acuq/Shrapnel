@@ -366,7 +366,7 @@ func main() {
 		},
 	}
 
-	systemCmd.AddCommand(uninstallCmd, updateProfilesCmd)
+	systemCmd.AddCommand(uninstallCmd, updateProfilesCmd, diagCmd)
 
 	// Add commands to root
 	rootCmd.AddCommand(profileCmd, serviceCmd, userCmd, uriCmd, systemCmd)
@@ -876,6 +876,160 @@ func generateSHA256Pin(ip string, port int) string {
 	}
 	
 	return formattedPin
+}
+
+func runDiagnostics(profileID string) error {
+	fmt.Println("========================================")
+	fmt.Println("         Shrapnel Diagnostics")
+	fmt.Println("========================================")
+	
+	// 1. Check Hysteria2 binary
+	fmt.Println("\n[1] Checking Hysteria2 binary...")
+	if _, err := os.Stat(binaryPath); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Printf("❌ Hysteria2 not found at: %s\n", binaryPath)
+			return fmt.Errorf("Hysteria2 binary not found")
+		}
+		return fmt.Errorf("Error checking Hysteria2: %w", err)
+	}
+	fmt.Printf("✅ Hysteria2 found at: %s\n", binaryPath)
+	
+	// Check Hysteria2 version
+	cmd := exec.Command(binaryPath, "version")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("⚠️  Could not get Hysteria2 version: %v\n", err)
+	} else {
+		fmt.Printf("✅ Hysteria2 version: %s\n", strings.TrimSpace(string(output)))
+	}
+	
+	// 2. Check profile configuration
+	if profileID != "" {
+		fmt.Println("\n[2] Checking profile configuration...")
+		registry, err := profile.NewProfileRegistry(configDir, dataDir)
+		if err != nil {
+			return fmt.Errorf("Failed to initialize registry: %w", err)
+		}
+		
+		prof, err := registry.GetProfile(profileID)
+		if err != nil {
+			fmt.Printf("❌ Profile not found: %s\n", profileID)
+			return fmt.Errorf("Profile not found: %s", profileID)
+		}
+		
+		fmt.Printf("✅ Profile found: %s\n", prof.ID)
+		fmt.Printf("   Name: %s\n", prof.Name)
+		fmt.Printf("   IP: %s\n", prof.IPAddress)
+		fmt.Printf("   Port: %d\n", prof.Port)
+		fmt.Printf("   SNI: %s\n", prof.SNI)
+		fmt.Printf("   Username: %s\n", prof.Username)
+		fmt.Printf("   Password: %s\n", prof.Password)
+		
+		// Check configuration file
+		configPath := registry.GetProfileConfigPath(profileID)
+		if _, err := os.Stat(configPath); err != nil {
+			fmt.Printf("❌ Config file not found: %s\n", configPath)
+			return fmt.Errorf("Config file not found")
+		}
+		fmt.Printf("✅ Config file exists: %s\n", configPath)
+		
+		// Validate YAML syntax
+		cmd = exec.Command("grep", "-q", "listen:", configPath)
+		if err != nil {
+			fmt.Printf("❌ Config file may be invalid (missing listen directive)\n")
+		} else {
+			fmt.Printf("✅ Config file syntax appears valid\n")
+		}
+		
+		// Check certificates
+		certFile := filepath.Join(registry.GetProfileDirectory(profileID), "cert.pem")
+		keyFile := filepath.Join(registry.GetProfileDirectory(profileID), "key.pem")
+		
+		if _, err := os.Stat(certFile); err != nil {
+			fmt.Printf("❌ Certificate file not found: %s\n", certFile)
+		} else {
+			fmt.Printf("✅ Certificate file exists: %s\n", certFile)
+		}
+		
+		if _, err := os.Stat(keyFile); err != nil {
+			fmt.Printf("❌ Key file not found: %s\n", keyFile)
+		} else {
+			fmt.Printf("✅ Key file exists: %s\n", keyFile)
+		}
+		
+		// 3. Check service status
+		fmt.Println("\n[3] Checking service status...")
+		serviceManager, err := service.NewServiceManager()
+		if err != nil {
+			return fmt.Errorf("Failed to initialize service manager: %w", err)
+		}
+		
+		status, err := serviceManager.GetServiceStatus(profileID)
+		if err != nil {
+			fmt.Printf("⚠️  Could not get service status: %v\n", err)
+		} else {
+			fmt.Printf("Service: %s\n", status.Name)
+			fmt.Printf("Status: %s\n", status.Status)
+			fmt.Printf("Enabled: %t\n", status.Enabled)
+		}
+		
+		// 4. Check port availability
+		fmt.Println("\n[4] Checking port availability...")
+		cmd = exec.Command("sh", "-c", fmt.Sprintf("netstat -tuln | grep :%d", prof.Port))
+		output, err = cmd.CombinedOutput()
+		if err == nil && len(output) > 0 {
+			fmt.Printf("⚠️  Port %d is already in use:\n%s\n", prof.Port, string(output))
+		} else {
+			fmt.Printf("✅ Port %d is available\n", prof.Port)
+		}
+		
+		// 5. Check if IP is configured on system
+		fmt.Println("\n[5] Checking IP configuration...")
+		cmd = exec.Command("ip", "addr", "show")
+		output, err = cmd.CombinedOutput()
+		if err != nil {
+			fmt.Printf("⚠️  Could not check IP configuration: %v\n", err)
+		} else {
+			if strings.Contains(string(output), prof.IPAddress) {
+				fmt.Printf("✅ IP %s is configured on system\n", prof.IPAddress)
+			} else {
+				fmt.Printf("⚠️  IP %s may not be configured on system\n", prof.IPAddress)
+			}
+		}
+		
+		// 6. Try to test Hysteria2 config
+		fmt.Println("\n[6] Testing Hysteria2 configuration...")
+		cmd = exec.Command(binaryPath, "server", "--config", configPath, "--test")
+		output, err = cmd.CombinedOutput()
+		if err != nil {
+			fmt.Printf("❌ Configuration test failed:\n%s\n", string(output))
+			return fmt.Errorf("Configuration test failed")
+		} else {
+			fmt.Printf("✅ Configuration test passed\n")
+		}
+	} else {
+		fmt.Println("\n[2] Skipping profile checks (no profile ID specified)")
+	}
+	
+	// 7. System information
+	fmt.Println("\n[7] System information...")
+	cmd = exec.Command("uname", "-a")
+	output, err = cmd.CombinedOutput()
+	if err == nil {
+		fmt.Printf("System: %s\n", strings.TrimSpace(string(output)))
+	}
+	
+	cmd = exec.Command("systemctl", "--version")
+	output, err = cmd.CombinedOutput()
+	if err == nil {
+		fmt.Printf("Systemd: %s", strings.TrimSpace(string(output)))
+	}
+	
+	fmt.Println("\n========================================")
+	fmt.Println("         Diagnostics Complete")
+	fmt.Println("========================================")
+	
+	return nil
 }
 
 func uninstallShrapnel(force bool) error {
