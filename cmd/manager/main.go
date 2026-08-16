@@ -451,7 +451,7 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 
 	// Generate configuration with profile credentials (Blitz-style)
 	configData := config.ConfigData{
-		Listen:           fmt.Sprintf(":%d", port), // Listen on all interfaces like Blitz
+		Listen:           fmt.Sprintf("%s:%d", ip, port), // Bind to specific IP for multi-IP support
 		ProfileID:        id,
 		IPAddress:        ip,
 		Port:             port,
@@ -505,7 +505,7 @@ func editProfile(registry *profile.ProfileRegistry, generator *config.ConfigGene
 	keyFile := filepath.Join(registry.GetProfileDirectory(id), "key.pem")
 	
 	configData := config.ConfigData{
-		Listen:           fmt.Sprintf(":%d", prof.Port), // Listen on all interfaces like Blitz
+		Listen:           fmt.Sprintf("%s:%d", prof.IPAddress, prof.Port), // Bind to specific IP for multi-IP support
 		ProfileID:        id,
 		IPAddress:        prof.IPAddress,
 		Port:             prof.Port,

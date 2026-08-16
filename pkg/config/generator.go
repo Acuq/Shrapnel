@@ -172,8 +172,7 @@ outbounds:
   - name: direct
     type: direct
     direct:
-      mode: 4
-      bindDevice: ens3
+      mode: auto
       fastOpen: true
 
 # Traffic Statistics
