@@ -68,6 +68,7 @@ main_menu() {
         echo -e "${GREEN}[3]${NC} IP Management"
         echo -e "${GREEN}[4]${NC} Traffic Monitoring"
         echo -e "${GREEN}[5]${NC} User Management"
+        echo -e "${RED}[6]${NC} Uninstall Shrapnel"
         echo -e "${RED}[0]${NC} Exit"
         echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
         echo -ne "${YELLOW}➜ Enter your option: ${NC}"
@@ -79,6 +80,7 @@ main_menu() {
             3) ip_menu ;;
             4) traffic_menu ;;
             5) user_menu ;;
+            6) uninstall_shrapnel ;;
             0) exit 0 ;;
             *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
         esac
@@ -688,6 +690,42 @@ toggle_speedtest() {
     local profile_id=$1
     echo -e "${YELLOW}Toggle speed test for profile: $profile_id${NC}"
     echo "Implementation pending - requires profile update functionality"
+}
+
+# Uninstall Shrapnel
+uninstall_shrapnel() {
+    echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${RED}            ⚠️  UNINSTALL SHRAPNEL ⚠️${NC}"
+    echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "${YELLOW}This will completely remove Shrapnel from your system:${NC}"
+    echo -e "${YELLOW}• Stop all Shrapnel services${NC}"
+    echo -e "${YELLOW}• Remove Shrapnel binaries${NC}"
+    echo -e "${YELLOW}• Remove Shrapnel directories (/opt/shrapnel)${NC}"
+    echo -e "${YELLOW}• Remove Shrapnel systemd services${NC}"
+    echo -e "${YELLOW}• Remove symlinks from /usr/local/bin${NC}"
+    echo -e "${GREEN}• Keep Hysteria2 binary and other dependencies${NC}"
+    echo ""
+    echo -e "${YELLOW}All profiles and data will be deleted!${NC}"
+    echo ""
+    read -p "Are you sure you want to uninstall Shrapnel? (yes/no): " confirm
+    
+    if [ "$confirm" != "yes" ]; then
+        echo -e "${GREEN}Uninstall cancelled${NC}"
+        return
+    fi
+    
+    echo -e "${YELLOW}Uninstalling Shrapnel...${NC}"
+    
+    # Use the CLI uninstall command
+    if $MANAGER_PATH system uninstall --force; then
+        echo -e "${GREEN}✓ Shrapnel uninstalled successfully${NC}"
+        echo ""
+        echo -e "${YELLOW}To reinstall, run:${NC}"
+        echo -e "${GREEN}cd /tmp && git clone https://github.com/Acuq/Shrapnel.git && cd Shrapnel && sudo bash scripts/install.sh${NC}"
+    else
+        echo -e "${RED}✗ Uninstall failed${NC}"
+    fi
 }
 
 # Main execution
