@@ -98,6 +98,14 @@ cd "$PROJECT_DIR"
 # Build the manager
 echo "Building manager..."
 cd cmd/manager
+
+# Add local package replacements and tidy
+go mod edit -replace github.com/Acuq/shrapnel/pkg/profile="$PROJECT_DIR/pkg/profile"
+go mod edit -replace github.com/Acuq/shrapnel/pkg/config="$PROJECT_DIR/pkg/config"
+go mod edit -replace github.com/Acuq/shrapnel/pkg/service="$PROJECT_DIR/pkg/service"
+go mod tidy
+
+# Build the binary
 go build -o "$INSTALL_DIR/shrapnel-manager" .
 cd "$PROJECT_DIR"
 
