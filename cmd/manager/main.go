@@ -880,14 +880,60 @@ func generateUserURI(profileID, username string, showQR, withSHA256 bool) error 
 
 func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 	// Build URI parameters with obfs (Blitz-style) using profile's obfs password
-	uriParams := fmt.Sprintf("obfs=salamander&obfs-password=%s&insecure=1&sni=%s",
-		prof.ObfsPassword, prof.SNI)
-	
-	// Add SHA256 pin if requested
+	// Don't include insecure when using SHA256 pin
 	if withSHA256 {
+		uriParams := fmt.Sprintf("obfs=salamander&obfs-password=%s&sni=%s",
+			prof.ObfsPassword, prof.SNI)
+		
 		sha256Pin := generateSHA256Pin(prof.ID)
 		uriParams += "&pinSHA256=" + sha256Pin
+		
+		// Generate Hysteria2 URI directly from profile
+		uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s#IPv4",
+			prof.Username,
+			prof.Password,
+			prof.IPAddress,
+			prof.Port,
+			uriParams)
+		
+		fmt.Println("========================================")
+		fmt.Printf("Connection URI for Profile: %s\n", prof.ID)
+		fmt.Println("========================================")
+		fmt.Printf("Name: %s\n", prof.Name)
+		fmt.Printf("Username: %s\n", prof.Username)
+		fmt.Printf("Password: %s\n", prof.Password)
+		fmt.Printf("IP: %s\n", prof.IPAddress)
+		fmt.Printf("Port: %d\n", prof.Port)
+		fmt.Printf("SNI: %s\n", prof.SNI)
+		fmt.Printf("Obfs Password: %s\n", prof.ObfsPassword)
+		fmt.Printf("SHA256 Pin: %s\n", sha256Pin)
+		fmt.Println("========================================")
+		fmt.Printf("URI: %s\n", uri)
+		fmt.Println("========================================")
+		
+		if showQR {
+			// Generate QR code using qrencode
+			cmd := exec.Command("qrencode", "-t", "ANSIUTF8", uri)
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				fmt.Printf("Note: QR code generation requires qrencode: %v\n", err)
+				fmt.Println("Install with: apt-get install qrencode")
+			} else {
+				fmt.Println("QR Code:")
+				fmt.Println(string(output))
+			}
+		}
+		
+		logger.Info("Profile URI generated successfully",
+			zap.String("profile", prof.ID),
+			zap.String("username", prof.Username))
+		
+		return nil
 	}
+	
+	// Without SHA256 - use insecure
+	uriParams := fmt.Sprintf("obfs=salamander&obfs-password=%s&insecure=1&sni=%s",
+		prof.ObfsPassword, prof.SNI)
 	
 	// Generate Hysteria2 URI directly from profile
 	uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s#IPv4",
@@ -907,9 +953,6 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 	fmt.Printf("Port: %d\n", prof.Port)
 	fmt.Printf("SNI: %s\n", prof.SNI)
 	fmt.Printf("Obfs Password: %s\n", prof.ObfsPassword)
-	if withSHA256 {
-		fmt.Printf("SHA256 Pin: generated\n")
-	}
 	fmt.Println("========================================")
 	fmt.Printf("URI: %s\n", uri)
 	fmt.Println("========================================")
@@ -947,8 +990,8 @@ func generateSHA256Pin(profileID string) string {
 		return "64:65:84:A8:03:72:B3:3A:CC:8A:B3:6F:9C:03:7F:B1:20:32:B6:E0:B7:DB:DB:DE:70:EF:44:14:10:CD:1E:E1"
 	}
 	
-	// Generate SHA256 of the public key
-	cmd = exec.Command("openssl", "pkey", "-pubin", "-in", "/dev/stdin", "-outform", "der")
+	// Generate SHA256 of the public key in hex format
+	cmd = exec.Command("openssl", "pkey", "-pubin", "-in", "/dev/stdin", "-pubout", "-outform", "der")
 	cmd.Stdin = strings.NewReader(string(output))
 	pubkeyDer, err := cmd.CombinedOutput()
 	if err != nil {
@@ -956,38 +999,39 @@ func generateSHA256Pin(profileID string) string {
 		return "64:65:84:A8:03:72:B3:3A:CC:8A:B3:6F:9C:03:7F:B1:20:32:B6:E0:B7:DB:DB:DE:70:EF:44:14:10:CD:1E:E1"
 	}
 	
-	// Calculate SHA256
-	cmd = exec.Command("openssl", "dgst", "-sha256", "-binary")
+	// Calculate SHA256 and get hex output
+	cmd = exec.Command("openssl", "dgst", "-sha256", "-hex")
 	cmd.Stdin = bytes.NewReader(pubkeyDer)
-	sha256Bytes, err := cmd.CombinedOutput()
+	sha256Hex, err := cmd.CombinedOutput()
 	if err != nil {
 		logger.Warn("Failed to calculate SHA256", zap.Error(err))
 		return "64:65:84:A8:03:72:B3:3A:CC:8A:B3:6F:9C:03:7F:B1:20:32:B6:E0:B7:DB:DB:DE:70:EF:44:14:10:CD:1E:E1"
 	}
 	
-	// Base64 encode
-	cmd = exec.Command("openssl", "enc", "-base64", "-A")
-	cmd.Stdin = bytes.NewReader(sha256Bytes)
-	pinOutput, err := cmd.CombinedOutput()
-	if err != nil {
-		logger.Warn("Failed to base64 encode SHA256", zap.Error(err))
+	// Parse hex output (format: "SHA256(...) = hexstring")
+	hexOutput := string(sha256Hex)
+	parts := strings.Split(hexOutput, "=")
+	if len(parts) < 2 {
+		logger.Warn("Failed to parse SHA256 output", zap.String("output", hexOutput))
 		return "64:65:84:A8:03:72:B3:3A:CC:8A:B3:6F:9C:03:7F:B1:20:32:B6:E0:B7:DB:DB:DE:70:EF:44:14:10:CD:1E:E1"
 	}
 	
-	// Format as SHA256 pin (split into 2-character groups)
-	pin := strings.TrimSpace(string(pinOutput))
-	pin = strings.ReplaceAll(pin, "=", "")
+	hexString := strings.TrimSpace(parts[1])
 	
-	// Split into 2-character groups with colons
+	// Remove any spaces and convert to uppercase
+	hexString = strings.ReplaceAll(hexString, " ", "")
+	hexString = strings.ToUpper(hexString)
+	
+	// Format as SHA256 pin (split into 2-character groups with colons)
 	var formattedPin string
-	for i := 0; i < len(pin) && i < 64; i += 2 {
+	for i := 0; i < len(hexString) && i < 64; i += 2 {
 		if i > 0 {
 			formattedPin += ":"
 		}
-		if i+2 <= len(pin) {
-			formattedPin += pin[i:i+2]
+		if i+2 <= len(hexString) {
+			formattedPin += hexString[i:i+2]
 		} else {
-			formattedPin += pin[i:]
+			formattedPin += hexString[i:]
 		}
 	}
 	
