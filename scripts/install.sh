@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # Shrapnel Multi-IP Proxy Manager Installation Script
-# Based on Blitz Panel installation approach
 
 set -e
 
@@ -10,7 +9,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 # Configuration
 INSTALL_DIR="/usr/local/bin"
@@ -80,7 +79,6 @@ mkdir -p "$SCRIPT_DIR"
 # Install Hysteria2 if not present
 if ! command -v hysteria &> /dev/null; then
     echo -e "${YELLOW}Installing Hysteria2...${NC}"
-    # Download latest hysteria2
     HYSTERIA_VERSION=$(curl -s https://api.github.com/repos/apernet/hysteria/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
     wget "https://github.com/apernet/hysteria/releases/download/${HYSTERIA_VERSION}/hysteria-linux-amd64" -O "$INSTALL_DIR/hysteria"
     chmod +x "$INSTALL_DIR/hysteria"
@@ -91,13 +89,10 @@ fi
 
 # Build and install manager
 echo -e "${YELLOW}Building Shrapnel Manager...${NC}"
-# Assuming the script is run from the project directory
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd"
-cd "$PROJECT_DIR"
+PROJECT_DIR=$(pwd)
 
-# Build the manager using go workspaces
 echo "Building manager..."
-cd cmd/manager
+cd "$PROJECT_DIR/cmd/manager"
 
 # Initialize go work for monorepo
 cd "$PROJECT_DIR"
@@ -107,10 +102,9 @@ go work use ./pkg/profile
 go work use ./pkg/config
 go work use ./pkg/service
 
-cd cmd/manager
+cd "$PROJECT_DIR/cmd/manager"
 go mod tidy
 go build -o "$INSTALL_DIR/shrapnel-manager" .
-cd "$PROJECT_DIR"
 
 chmod +x "$INSTALL_DIR/shrapnel-manager"
 echo -e "${GREEN}✓ Manager installed${NC}"
