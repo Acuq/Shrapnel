@@ -173,9 +173,19 @@ create_profile() {
     read -p "Enter SNI (default: bts.com): " sni
     sni=${sni:-bts.com}
     
+    # Masquerade
+    read -p "Enable Masquerade? (Y/n, default: Y): " enable_masquerade
+    enable_masquerade=${enable_masquerade:-Y}
+    
+    if [[ "$enable_masquerade" =~ ^[Yy]$ ]]; then
+        masquerade_flag="--masquerade"
+    else
+        masquerade_flag="--no-masquerade"
+    fi
+    
     # Create profile
     echo -e "${YELLOW}Creating profile...${NC}"
-    if $MANAGER_PATH profile create --id "$profile_id" --name "$profile_name" --ip "$ip_address" --port "$port" --sni "$sni"; then
+    if $MANAGER_PATH profile create --id "$profile_id" --name "$profile_name" --ip "$ip_address" --port "$port" --sni "$sni" $masquerade_flag; then
         echo -e "${GREEN}✓ Profile created successfully!${NC}"
         
         # Ask if user wants to start the service
