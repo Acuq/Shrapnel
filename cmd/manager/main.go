@@ -857,7 +857,10 @@ func generateUserURI(profileID, username string, showQR, withSHA256 bool) error 
 	
 	// Add SHA256 pin if requested
 	if withSHA256 {
-		sha256Pin := generateSHA256Pin(profileID)
+		sha256Pin, err := generateSHA256Pin(profileID)
+		if err != nil {
+			return fmt.Errorf("failed to generate SHA256 pin: %w", err)
+		}
 		uriParams += "&pinSHA256=" + sha256Pin
 	}
 	
@@ -909,7 +912,10 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 		uriParams := fmt.Sprintf("obfs=salamander&obfs-password=%s&sni=%s",
 			prof.ObfsPassword, prof.SNI)
 		
-		sha256Pin := generateSHA256Pin(prof.ID)
+		sha256Pin, err := generateSHA256Pin(prof.ID)
+		if err != nil {
+			return fmt.Errorf("failed to generate SHA256 pin: %w", err)
+		}
 		uriParams += "&pinSHA256=" + sha256Pin
 		
 		// Generate Hysteria2 URI - password auth expects only password, not username:password
@@ -997,7 +1003,7 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 	return nil
 }
 
-func generateSHA256Pin(profileID string) string {
+func generateSHA256Pin(profileID string) (string, error) {
 	// Generate SHA256 pin for the server certificate
 	// Use the profile's certificate path
 	certPath := filepath.Join(configDir, profileID, "cert.pem")
@@ -1005,9 +1011,7 @@ func generateSHA256Pin(profileID string) string {
 	cmd := exec.Command("openssl", "x509", "-in", certPath, "-pubkey", "-noout", "-outform", "pem")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// Fallback to placeholder if certificate not found
-		logger.Warn("Failed to extract certificate public key", zap.String("cert", certPath), zap.Error(err))
-		return "64:65:84:A8:03:72:B3:3A:CC:8A:B3:6F:9C:03:7F:B1:20:32:B6:E0:B7:DB:DB:DE:70:EF:44:14:10:CD:1E:E1"
+		return "", fmt.Errorf("failed to extract certificate public key: %w", err)
 	}
 	
 	// Generate SHA256 of the public key in hex format
@@ -1015,8 +1019,7 @@ func generateSHA256Pin(profileID string) string {
 	cmd.Stdin = strings.NewReader(string(output))
 	pubkeyDer, err := cmd.CombinedOutput()
 	if err != nil {
-		logger.Warn("Failed to convert public key to DER", zap.Error(err))
-		return "64:65:84:A8:03:72:B3:3A:CC:8A:B3:6F:9C:03:7F:B1:20:32:B6:E0:B7:DB:DB:DE:70:EF:44:14:10:CD:1E:E1"
+		return "", fmt.Errorf("failed to convert public key to DER: %w", err)
 	}
 	
 	// Calculate SHA256 and get hex output
@@ -1024,16 +1027,14 @@ func generateSHA256Pin(profileID string) string {
 	cmd.Stdin = bytes.NewReader(pubkeyDer)
 	sha256Hex, err := cmd.CombinedOutput()
 	if err != nil {
-		logger.Warn("Failed to calculate SHA256", zap.Error(err))
-		return "64:65:84:A8:03:72:B3:3A:CC:8A:B3:6F:9C:03:7F:B1:20:32:B6:E0:B7:DB:DB:DE:70:EF:44:14:10:CD:1E:E1"
+		return "", fmt.Errorf("failed to calculate SHA256: %w", err)
 	}
 	
 	// Parse hex output (format: "SHA256(...) = hexstring")
 	hexOutput := string(sha256Hex)
 	parts := strings.Split(hexOutput, "=")
 	if len(parts) < 2 {
-		logger.Warn("Failed to parse SHA256 output", zap.String("output", hexOutput))
-		return "64:65:84:A8:03:72:B3:3A:CC:8A:B3:6F:9C:03:7F:B1:20:32:B6:E0:B7:DB:DB:DE:70:EF:44:14:10:CD:1E:E1"
+		return "", fmt.Errorf("failed to parse SHA256 output: %s", hexOutput)
 	}
 	
 	hexString := strings.TrimSpace(parts[1])
@@ -1055,7 +1056,7 @@ func generateSHA256Pin(profileID string) string {
 		}
 	}
 	
-	return formattedPin
+	return formattedPin, nil
 }
 
 func runDiagnostics(profileID string) error {
