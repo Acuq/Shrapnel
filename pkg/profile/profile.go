@@ -1,6 +1,8 @@
 package profile
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -102,6 +104,10 @@ func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, port int, sn
 		return nil, fmt.Errorf("invalid port number: %d", port)
 	}
 	
+	// Generate username and password for the profile
+	username := id
+	password := generateRandomPassword()
+	
 	// Create profile
 	profile := &Profile{
 		ID:          id,
@@ -109,6 +115,8 @@ func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, port int, sn
 		IPAddress:   ipAddress,
 		Port:        port,
 		SNI:         sni,
+		Username:    username,
+		Password:    password,
 		Status:      "inactive",
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -335,4 +343,14 @@ func (r *ProfileRegistry) GetProfileConfigPath(id string) string {
 // GetProfileUsersDBPath returns the users database path for a profile
 func (r *ProfileRegistry) GetProfileUsersDBPath(id string) string {
 	return filepath.Join(r.dataDir, fmt.Sprintf("%s_users.db", id))
+}
+
+// generateRandomPassword generates a random password
+func generateRandomPassword() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to time-based password if crypto rand fails
+		return fmt.Sprintf("shrapnel%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)[:32]
 }

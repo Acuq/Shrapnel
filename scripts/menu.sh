@@ -101,7 +101,8 @@ profile_menu() {
         echo -e "${GREEN}[3]${NC} View Profile Details"
         echo -e "${GREEN}[4]${NC} Edit Profile"
         echo -e "${GREEN}[5]${NC} Show Profile URI"
-        echo -e "${GREEN}[6]${NC} Delete Profile"
+        echo -e "${GREEN}[6]${NC} Update All Profiles"
+        echo -e "${GREEN}[7]${NC} Delete Profile"
         echo -e "${RED}[0]${NC} Back to Main Menu"
         echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
         echo -ne "${YELLOW}➜ Enter your option: ${NC}"
@@ -113,7 +114,8 @@ profile_menu() {
             3) view_profile ;;
             4) edit_profile ;;
             5) show_profile_uri ;;
-            6) delete_profile ;;
+            6) update_all_profiles ;;
+            7) delete_profile ;;
             0) break ;;
             *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
         esac
@@ -275,6 +277,12 @@ delete_profile() {
     else
         echo -e "${RED}✗ Failed to delete profile${NC}"
     fi
+}
+
+# Update all profiles
+update_all_profiles() {
+    echo -e "${YELLOW}Updating all profiles with missing credentials...${NC}"
+    $MANAGER_PATH system update-profiles
 }
 
 # Show profile URI

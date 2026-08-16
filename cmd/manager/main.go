@@ -314,7 +314,59 @@ func main() {
 	}
 	uninstallCmd.Flags().Bool("force", false, "Force uninstall without confirmation")
 
-	systemCmd.AddCommand(uninstallCmd)
+	// Update profiles command
+	updateProfilesCmd := &cobra.Command{
+		Use:   "update-profiles",
+		Short: "Update all profiles with missing credentials",
+		Run: func(cmd *cobra.Command, args []string) {
+			registry, err := profile.NewProfileRegistry(configDir, dataDir)
+			if err != nil {
+				logger.Error("Failed to initialize registry", zap.Error(err))
+				fmt.Printf("Error: %v\n", err)
+				os.Exit(1)
+			}
+			
+			profiles := registry.ListProfiles()
+			updatedCount := 0
+			
+			for _, prof := range profiles {
+				needsUpdate := false
+				
+				// Check if profile has username and password
+				if prof.Username == "" {
+					prof.Username = prof.ID
+					needsUpdate = true
+				}
+				
+				if prof.Password == "" {
+					prof.Password = generatePassword()
+					needsUpdate = true
+				}
+				
+				if needsUpdate {
+					err := registry.UpdateProfile(prof.ID, func(p *profile.Profile) error {
+						p.Username = prof.Username
+						p.Password = prof.Password
+						return nil
+					})
+					
+					if err == nil {
+						updatedCount++
+						fmt.Printf("Updated profile: %s (username: %s, password: %s)\n", 
+							prof.ID, prof.Username, prof.Password)
+					}
+				}
+			}
+			
+			if updatedCount > 0 {
+				fmt.Printf("Updated %d profiles with credentials\n", updatedCount)
+			} else {
+				fmt.Println("All profiles already have credentials")
+			}
+		},
+	}
+
+	systemCmd.AddCommand(uninstallCmd, updateProfilesCmd)
 
 	// Add commands to root
 	rootCmd.AddCommand(profileCmd, serviceCmd, userCmd, uriCmd, systemCmd)
