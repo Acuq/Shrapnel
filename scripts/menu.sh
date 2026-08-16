@@ -1,0 +1,665 @@
+#!/bin/bash
+
+# Shrapnel Multi-IP Proxy Manager Console Panel
+# Based on Blitz Panel design for consistency
+
+# Configuration
+CONFIG_DIR="/etc/shrapnel"
+DATA_DIR="/var/lib/shrapnel"
+BINARY_PATH="/usr/local/bin/hysteria"
+MANAGER_PATH="/usr/local/bin/shrapnel-manager"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# System info
+OS=$(cat /etc/os-release | grep ^ID= | cut -d= -f2 | tr -d '"')
+ARCH=$(uname -m)
+CPU=$(lscpu | grep 'Model name' | cut -d: -f2 | xargs)
+RAM=$(free -h | awk '/^Mem:/ {print $2}')
+IP=$(hostname -I | awk '{print $1}')
+
+# Check if manager is installed
+check_manager() {
+    if [ ! -f "$MANAGER_PATH" ]; then
+        echo -e "${RED}Error: Shrapnel Manager not found at $MANAGER_PATH${NC}"
+        echo "Please install the manager first"
+        exit 1
+    fi
+}
+
+# Display system information
+display_system_info() {
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${PURPLE}         🚀 Shrapnel Multi-IP Proxy Manager 🚀${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+
+    printf "\033[0;32m• OS:  \033[0m%-20s \033[0;32m• ARCH:  \033[0m%-20s\n" "$OS" "$ARCH"
+    printf "\033[0;32m• CPU: \033[0m%-20s \033[0;32m• RAM:   \033[0m%-20s\n" "$CPU" "$RAM"
+    printf "\033[0;32m• IP:  \033[0m%-20s \033[0;32m• PROFILES:\033[0m%-20s\n" "$IP" "$(get_profile_count)"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+}
+
+# Get profile count
+get_profile_count() {
+    if [ -d "$CONFIG_DIR" ]; then
+        count=$(find "$CONFIG_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l)
+        echo "$count"
+    else
+        echo "0"
+    fi
+}
+
+# Main menu
+main_menu() {
+    while true; do
+        clear
+        display_system_info
+        echo -e "${YELLOW}                   ☼ Main Menu ☼${NC}"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}[1]${NC} Profile Management"
+        echo -e "${GREEN}[2]${NC} Service Management"
+        echo -e "${GREEN}[3]${NC} IP Management"
+        echo -e "${GREEN}[4]${NC} Traffic Monitoring"
+        echo -e "${GREEN}[5]${NC} User Management"
+        echo -e "${RED}[0]${NC} Exit"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -ne "${YELLOW}➜ Enter your option: ${NC}"
+        
+        read -r choice
+        case $choice in
+            1) profile_menu ;;
+            2) service_menu ;;
+            3) ip_menu ;;
+            4) traffic_menu ;;
+            5) user_menu ;;
+            0) exit 0 ;;
+            *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
+        esac
+        echo -e "${YELLOW}Press Enter to continue...${NC}"
+        read -r
+    done
+}
+
+# Profile management menu
+profile_menu() {
+    while true; do
+        clear
+        display_system_info
+        echo -e "${YELLOW}                   ☼ Profile Management ☼${NC}"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}[1]${NC} Create Profile"
+        echo -e "${GREEN}[2]${NC} List Profiles"
+        echo -e "${GREEN}[3]${NC} View Profile Details"
+        echo -e "${GREEN}[4]${NC} Edit Profile"
+        echo -e "${GREEN}[5]${NC} Delete Profile"
+        echo -e "${RED}[0]${NC} Back to Main Menu"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -ne "${YELLOW}➜ Enter your option: ${NC}"
+        
+        read -r choice
+        case $choice in
+            1) create_profile ;;
+            2) list_profiles ;;
+            3) view_profile ;;
+            4) edit_profile ;;
+            5) delete_profile ;;
+            0) break ;;
+            *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
+        esac
+        if [ "$choice" != "0" ]; then
+            echo -e "${YELLOW}Press Enter to continue...${NC}"
+            read -r
+        fi
+    done
+}
+
+# Create profile
+create_profile() {
+    echo -e "${CYAN}Create New Profile${NC}"
+    echo -e "${CYAN}─────────────────────────────────────────────────────────────────${NC}"
+    
+    # Profile ID
+    while true; do
+        read -p "Enter Profile ID (alphanumeric, no spaces): " profile_id
+        if [[ "$profile_id" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            break
+        else
+            echo -e "${RED}Invalid ID. Use only letters, numbers, hyphens, and underscores.${NC}"
+        fi
+    done
+    
+    # Profile Name
+    read -p "Enter Profile Name: " profile_name
+    
+    # IP Address
+    while true; do
+        read -p "Enter IP Address: " ip_address
+        if [[ "$ip_address" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            if [[ $(echo "$ip_address" | awk -F. '{for (i=1;i<=NF;i++) if ($i>255) exit 1}') ]]; then
+                echo -e "${RED}Invalid IPv4 address. Values must be between 0 and 255.${NC}"
+            else
+                break
+            fi
+        else
+            echo -e "${RED}Invalid IPv4 address format.${NC}"
+        fi
+    done
+    
+    # Port
+    while true; do
+        read -p "Enter Port (default: 443): " port
+        port=${port:-443}
+        if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]; then
+            break
+        else
+            echo -e "${RED}Invalid port number. Enter a number between 1 and 65535.${NC}"
+        fi
+    done
+    
+    # SNI
+    read -p "Enter SNI (default: bts.com): " sni
+    sni=${sni:-bts.com}
+    
+    # Create profile
+    echo -e "${YELLOW}Creating profile...${NC}"
+    if $MANAGER_PATH profile create --id "$profile_id" --name "$profile_name" --ip "$ip_address" --port "$port" --sni "$sni"; then
+        echo -e "${GREEN}✓ Profile created successfully!${NC}"
+        
+        # Ask if user wants to start the service
+        read -p "Start the service now? (y/n): " start_service
+        if [[ "$start_service" =~ ^[Yy]$ ]]; then
+            if $MANAGER_PATH service start "$profile_id"; then
+                echo -e "${GREEN}✓ Service started successfully!${NC}"
+            else
+                echo -e "${RED}✗ Failed to start service${NC}"
+            fi
+        fi
+    else
+        echo -e "${RED}✗ Failed to create profile${NC}"
+    fi
+}
+
+# List profiles
+list_profiles() {
+    echo -e "${CYAN}Existing Profiles${NC}"
+    echo -e "${CYAN}─────────────────────────────────────────────────────────────────${NC}"
+    
+    if [ "$(get_profile_count)" -eq 0 ]; then
+        echo -e "${YELLOW}No profiles found${NC}"
+        return
+    fi
+    
+    $MANAGER_PATH profile list
+}
+
+# View profile details
+view_profile() {
+    read -p "Enter Profile ID: " profile_id
+    
+    if [ -z "$profile_id" ]; then
+        echo -e "${RED}Profile ID cannot be empty${NC}"
+        return
+    fi
+    
+    $MANAGER_PATH profile get "$profile_id"
+}
+
+# Edit profile
+edit_profile() {
+    read -p "Enter Profile ID to edit: " profile_id
+    
+    if [ -z "$profile_id" ]; then
+        echo -e "${RED}Profile ID cannot be empty${NC}"
+        return
+    fi
+    
+    echo -e "${YELLOW}Edit Profile${NC}"
+    echo -e "${CYAN}─────────────────────────────────────────────────────────────────${NC}"
+    echo "Available options:"
+    echo "1. Change Port"
+    echo "2. Change SNI"
+    echo "3. Enable/Disable Masquerade"
+    echo "4. Enable/Disable Speed Test"
+    echo "0. Cancel"
+    
+    read -p "Select option: " edit_choice
+    
+    case $edit_choice in
+        1) change_profile_port "$profile_id" ;;
+        2) change_profile_sni "$profile_id" ;;
+        3) toggle_masquerade "$profile_id" ;;
+        4) toggle_speedtest "$profile_id" ;;
+        0) echo "Cancelled" ;;
+        *) echo -e "${RED}Invalid option${NC}" ;;
+    esac
+}
+
+# Delete profile
+delete_profile() {
+    read -p "Enter Profile ID to delete: " profile_id
+    
+    if [ -z "$profile_id" ]; then
+        echo -e "${RED}Profile ID cannot be empty${NC}"
+        return
+    fi
+    
+    # Confirm deletion
+    read -p "Are you sure you want to delete profile '$profile_id'? (y/n): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Deletion cancelled"
+        return
+    fi
+    
+    if $MANAGER_PATH profile delete "$profile_id"; then
+        echo -e "${GREEN}✓ Profile deleted successfully${NC}"
+    else
+        echo -e "${RED}✗ Failed to delete profile${NC}"
+    fi
+}
+
+# Service management menu
+service_menu() {
+    while true; do
+        clear
+        display_system_info
+        echo -e "${YELLOW}                   ☼ Service Management ☼${NC}"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}[1]${NC} Start Service"
+        echo -e "${GREEN}[2]${NC} Stop Service"
+        echo -e "${GREEN}[3]${NC} Restart Service"
+        echo -e "${GREEN}[4]${NC} View Service Status"
+        echo -e "${GREEN}[5]${NC} View Service Logs"
+        echo -e "${GREEN}[6]${NC} View All Services Status"
+        echo -e "${RED}[0]${NC} Back to Main Menu"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -ne "${YELLOW}➜ Enter your option: ${NC}"
+        
+        read -r choice
+        case $choice in
+            1) start_service ;;
+            2) stop_service ;;
+            3) restart_service ;;
+            4) view_service_status ;;
+            5) view_service_logs ;;
+            6) view_all_services ;;
+            0) break ;;
+            *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
+        esac
+        if [ "$choice" != "0" ]; then
+            echo -e "${YELLOW}Press Enter to continue...${NC}"
+            read -r
+        fi
+    done
+}
+
+# Start service
+start_service() {
+    read -p "Enter Profile ID: " profile_id
+    
+    if [ -z "$profile_id" ]; then
+        echo -e "${RED}Profile ID cannot be empty${NC}"
+        return
+    fi
+    
+    if $MANAGER_PATH service start "$profile_id"; then
+        echo -e "${GREEN}✓ Service started successfully${NC}"
+    else
+        echo -e "${RED}✗ Failed to start service${NC}"
+    fi
+}
+
+# Stop service
+stop_service() {
+    read -p "Enter Profile ID: " profile_id
+    
+    if [ -z "$profile_id" ]; then
+        echo -e "${RED}Profile ID cannot be empty${NC}"
+        return
+    fi
+    
+    if $MANAGER_PATH service stop "$profile_id"; then
+        echo -e "${GREEN}✓ Service stopped successfully${NC}"
+    else
+        echo -e "${RED}✗ Failed to stop service${NC}"
+    fi
+}
+
+# Restart service
+restart_service() {
+    read -p "Enter Profile ID: " profile_id
+    
+    if [ -z "$profile_id" ]; then
+        echo -e "${RED}Profile ID cannot be empty${NC}"
+        return
+    fi
+    
+    if $MANAGER_PATH service restart "$profile_id"; then
+        echo -e "${GREEN}✓ Service restarted successfully${NC}"
+    else
+        echo -e "${RED}✗ Failed to restart service${NC}"
+    fi
+}
+
+# View service status
+view_service_status() {
+    read -p "Enter Profile ID: " profile_id
+    
+    if [ -z "$profile_id" ]; then
+        echo -e "${RED}Profile ID cannot be empty${NC}"
+        return
+    fi
+    
+    $MANAGER_PATH service status "$profile_id"
+}
+
+# View service logs
+view_service_logs() {
+    read -p "Enter Profile ID: " profile_id
+    
+    if [ -z "$profile_id" ]; then
+        echo -e "${RED}Profile ID cannot be empty${NC}"
+        return
+    fi
+    
+    read -p "Number of lines (default: 50): " lines
+    lines=${lines:-50}
+    
+    service_name="shrapnel-profile-${profile_id}.service"
+    journalctl -u "$service_name" -n "$lines" --no-pager
+}
+
+# View all services
+view_all_services() {
+    $MANAGER_PATH service status
+}
+
+# IP management menu
+ip_menu() {
+    while true; do
+        clear
+        display_system_info
+        echo -e "${YELLOW}                   ☼ IP Management ☼${NC}"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}[1]${NC} List Available IPs"
+        echo -e "${GREEN}[2]${NC} Check IP Availability"
+        echo -e "${GREEN}[3]${NC} Assign IP to Profile"
+        echo -e "${RED}[0]${NC} Back to Main Menu"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -ne "${YELLOW}➜ Enter your option: ${NC}"
+        
+        read -r choice
+        case $choice in
+            1) list_available_ips ;;
+            2) check_ip_availability ;;
+            3) assign_ip_to_profile ;;
+            0) break ;;
+            *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
+        esac
+        if [ "$choice" != "0" ]; then
+            echo -e "${YELLOW}Press Enter to continue...${NC}"
+            read -r
+        fi
+    done
+}
+
+# List available IPs
+list_available_ips() {
+    echo -e "${CYAN}Available IP Addresses${NC}"
+    echo -e "${CYAN}─────────────────────────────────────────────────────────────────${NC}"
+    
+    # Get all network interfaces and their IPs
+    ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | sort -u
+    
+    echo -e "${YELLOW}Note: This shows all configured IPs on the system${NC}"
+}
+
+# Check IP availability
+check_ip_availability() {
+    read -p "Enter IP Address to check: " ip_address
+    
+    if [ -z "$ip_address" ]; then
+        echo -e "${RED}IP address cannot be empty${NC}"
+        return
+    fi
+    
+    # Check if IP is configured on system
+    if ip addr show | grep -q "$ip_address"; then
+        echo -e "${GREEN}✓ IP is configured on system${NC}"
+    else
+        echo -e "${RED}✗ IP is not configured on system${NC}"
+    fi
+    
+    # Check if IP is used by any profile
+    if [ -d "$CONFIG_DIR" ]; then
+        used_by=$(grep -r "ip_address: $ip_address" "$CONFIG_DIR" 2>/dev/null | cut -d: -f1 | xargs -I{} basename {})
+        if [ -n "$used_by" ]; then
+            echo -e "${YELLOW}⚠ IP is used by profile(s): $used_by${NC}"
+        else
+            echo -e "${GREEN}✓ IP is not used by any profile${NC}"
+        fi
+    fi
+}
+
+# Assign IP to profile
+assign_ip_to_profile() {
+    read -p "Enter Profile ID: " profile_id
+    read -p "Enter new IP Address: " ip_address
+    
+    if [ -z "$profile_id" ] || [ -z "$ip_address" ]; then
+        echo -e "${RED}Profile ID and IP address cannot be empty${NC}"
+        return
+    fi
+    
+    echo -e "${YELLOW}This feature requires profile reconfiguration${NC}"
+    echo "For now, please delete and recreate the profile with the new IP"
+}
+
+# Traffic monitoring menu
+traffic_menu() {
+    while true; do
+        clear
+        display_system_info
+        echo -e "${YELLOW}                   ☼ Traffic Monitoring ☼${NC}"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}[1]${NC} View Profile Traffic"
+        echo -e "${GREEN}[2]${NC} View All Profiles Traffic"
+        echo -e "${GREEN}[3]${NC} Reset Profile Traffic"
+        echo -e "${RED}[0]${NC} Back to Main Menu"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -ne "${YELLOW}➜ Enter your option: ${NC}"
+        
+        read -r choice
+        case $choice in
+            1) view_profile_traffic ;;
+            2) view_all_traffic ;;
+            3) reset_profile_traffic ;;
+            0) break ;;
+            *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
+        esac
+        if [ "$choice" != "0" ]; then
+            echo -e "${YELLOW}Press Enter to continue...${NC}"
+            read -r
+        fi
+    done
+}
+
+# View profile traffic
+view_profile_traffic() {
+    read -p "Enter Profile ID: " profile_id
+    
+    if [ -z "$profile_id" ]; then
+        echo -e "${RED}Profile ID cannot be empty${NC}"
+        return
+    fi
+    
+    # This would call the manager to get traffic stats
+    echo -e "${YELLOW}Traffic statistics for profile: $profile_id${NC}"
+    echo "Implementation pending - requires traffic stats collection"
+}
+
+# View all traffic
+view_all_traffic() {
+    echo -e "${CYAN}Traffic Statistics for All Profiles${NC}"
+    echo -e "${CYAN}─────────────────────────────────────────────────────────────────${NC}"
+    
+    # This would call the manager to get all traffic stats
+    echo "Implementation pending - requires traffic stats collection"
+}
+
+# Reset profile traffic
+reset_profile_traffic() {
+    read -p "Enter Profile ID: " profile_id
+    
+    if [ -z "$profile_id" ]; then
+        echo -e "${RED}Profile ID cannot be empty${NC}"
+        return
+    fi
+    
+    read -p "Are you sure you want to reset traffic stats? (y/n): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Cancelled"
+        return
+    fi
+    
+    echo -e "${YELLOW}Resetting traffic stats...${NC}"
+    echo "Implementation pending"
+}
+
+# User management menu
+user_menu() {
+    while true; do
+        clear
+        display_system_info
+        echo -e "${YELLOW}                   ☼ User Management ☼${NC}"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}[1]${NC} Add User to Profile"
+        echo -e "${GREEN}[2]${NC} List Users in Profile"
+        echo -e "${GREEN}[3]${NC} Remove User from Profile"
+        echo -e "${GREEN}[4]${NC} Reset User Traffic"
+        echo -e "${RED}[0]${NC} Back to Main Menu"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+        echo -ne "${YELLOW}➜ Enter your option: ${NC}"
+        
+        read -r choice
+        case $choice in
+            1) add_user ;;
+            2) list_users ;;
+            3) remove_user ;;
+            4) reset_user_traffic ;;
+            0) break ;;
+            *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
+        esac
+        if [ "$choice" != "0" ]; then
+            echo -e "${YELLOW}Press Enter to continue...${NC}"
+            read -r
+        fi
+    done
+}
+
+# Add user
+add_user() {
+    read -p "Enter Profile ID: " profile_id
+    
+    if [ -z "$profile_id" ]; then
+        echo -e "${RED}Profile ID cannot be empty${NC}"
+        return
+    fi
+    
+    echo -e "${YELLOW}User management for profile: $profile_id${NC}"
+    echo "Implementation pending - requires user database integration"
+}
+
+# List users
+list_users() {
+    read -p "Enter Profile ID: " profile_id
+    
+    if [ -z "$profile_id" ]; then
+        echo -e "${RED}Profile ID cannot be empty${NC}"
+        return
+    fi
+    
+    echo -e "${YELLOW}Users in profile: $profile_id${NC}"
+    echo "Implementation pending - requires user database integration"
+}
+
+# Remove user
+remove_user() {
+    read -p "Enter Profile ID: " profile_id
+    read -p "Enter Username: " username
+    
+    if [ -z "$profile_id" ] || [ -z "$username" ]; then
+        echo -e "${RED}Profile ID and Username cannot be empty${NC}"
+        return
+    fi
+    
+    echo -e "${YELLOW}Removing user: $username from profile: $profile_id${NC}"
+    echo "Implementation pending - requires user database integration"
+}
+
+# Reset user traffic
+reset_user_traffic() {
+    read -p "Enter Profile ID: " profile_id
+    read -p "Enter Username: " username
+    
+    if [ -z "$profile_id" ] || [ -z "$username" ]; then
+        echo -e "${RED}Profile ID and Username cannot be empty${NC}"
+        return
+    fi
+    
+    read -p "Are you sure you want to reset traffic for this user? (y/n): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Cancelled"
+        return
+    fi
+    
+    echo -e "${YELLOW}Resetting traffic for user: $username${NC}"
+    echo "Implementation pending - requires user database integration"
+}
+
+# Helper functions for profile editing
+change_profile_port() {
+    local profile_id=$1
+    read -p "Enter new port: " new_port
+    
+    if [[ "$new_port" =~ ^[0-9]+$ ]] && [ "$new_port" -ge 1 ] && [ "$new_port" -le 65535 ]; then
+        echo -e "${YELLOW}Changing port to $new_port${NC}"
+        echo "Implementation pending - requires profile update functionality"
+    else
+        echo -e "${RED}Invalid port number${NC}"
+    fi
+}
+
+change_profile_sni() {
+    local profile_id=$1
+    read -p "Enter new SNI: " new_sni
+    
+    if [ -n "$new_sni" ]; then
+        echo -e "${YELLOW}Changing SNI to $new_sni${NC}"
+        echo "Implementation pending - requires profile update functionality"
+    else
+        echo -e "${RED}SNI cannot be empty${NC}"
+    fi
+}
+
+toggle_masquerade() {
+    local profile_id=$1
+    echo -e "${YELLOW}Toggle masquerade for profile: $profile_id${NC}"
+    echo "Implementation pending - requires profile update functionality"
+}
+
+toggle_speedtest() {
+    local profile_id=$1
+    echo -e "${YELLOW}Toggle speed test for profile: $profile_id${NC}"
+    echo "Implementation pending - requires profile update functionality"
+}
+
+# Main execution
+check_manager
+main_menu

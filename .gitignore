@@ -1,0 +1,97 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+shrapnel-manager
+hysteria2-manager
+hysteria
+shrapnel
+
+# Go
+.go/
+*.sum
+vendor/
+go.work
+go.work.sum
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build
+bin/
+build/
+dist/
+tmp/
+temp/
+
+# Temporary files
+*.tmp
+*.log
+*.bak
+*.cache
+
+# Test
+*.test
+coverage.out
+coverage.html
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Documentation drafts
+*_DRAFT.md
+*_TEMP.md
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Certificates and keys (security)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Node modules (if any web interface added)
+node_modules/
+
+# Python (if any scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+
+# Backup files
+*.backup
+*.old
+*_backup.*
+
+# Lock files (except go.sum)
+*.lock
+# keep go.sum
+!go.sum
