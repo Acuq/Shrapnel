@@ -94,15 +94,11 @@ PROJECT_DIR=$(pwd)
 echo "Building manager..."
 cd "$PROJECT_DIR/cmd/manager"
 
-# Initialize go work for monorepo
-cd "$PROJECT_DIR"
-go work init
-go work use ./cmd/manager
-go work use ./pkg/profile
-go work use ./pkg/config
-go work use ./pkg/service
+# Replace local imports with local paths
+go mod edit -replace github.com/Acuq/shrapnel/pkg/profile="$PROJECT_DIR/pkg/profile"
+go mod edit -replace github.com/Acuq/shrapnel/pkg/config="$PROJECT_DIR/pkg/config"
+go mod edit -replace github.com/Acuq/shrapnel/pkg/service="$PROJECT_DIR/pkg/service"
 
-cd "$PROJECT_DIR/cmd/manager"
 go mod tidy
 go build -o "$INSTALL_DIR/shrapnel-manager" .
 
