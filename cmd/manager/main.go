@@ -905,10 +905,9 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 		sha256Pin := generateSHA256Pin(prof.ID)
 		uriParams += "&pinSHA256=" + sha256Pin
 		
-		// Generate Hysteria2 URI directly from profile
-		uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s#IPv4",
-			prof.Username,
-			prof.Password,
+		// Generate Hysteria2 URI - password auth expects only password, not username:password
+		uri := fmt.Sprintf("hy2://%s@%s:%d?%s#IPv4",
+			prof.Password,  // Only password, no username
 			prof.IPAddress,
 			prof.Port,
 			uriParams)
@@ -917,7 +916,6 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 		fmt.Printf("Connection URI for Profile: %s\n", prof.ID)
 		fmt.Println("========================================")
 		fmt.Printf("Name: %s\n", prof.Name)
-		fmt.Printf("Username: %s\n", prof.Username)
 		fmt.Printf("Password: %s\n", prof.Password)
 		fmt.Printf("IP: %s\n", prof.IPAddress)
 		fmt.Printf("Port: %d\n", prof.Port)
@@ -952,10 +950,9 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 	uriParams := fmt.Sprintf("obfs=salamander&obfs-password=%s&insecure=1&sni=%s",
 		prof.ObfsPassword, prof.SNI)
 	
-	// Generate Hysteria2 URI directly from profile
-	uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s#IPv4",
-		prof.Username,
-		prof.Password,
+	// Generate Hysteria2 URI - password auth expects only password, not username:password
+	uri := fmt.Sprintf("hy2://%s@%s:%d?%s#IPv4",
+		prof.Password,  // Only password, no username
 		prof.IPAddress,
 		prof.Port,
 		uriParams)
@@ -964,7 +961,6 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 	fmt.Printf("Connection URI for Profile: %s\n", prof.ID)
 	fmt.Println("========================================")
 	fmt.Printf("Name: %s\n", prof.Name)
-	fmt.Printf("Username: %s\n", prof.Username)
 	fmt.Printf("Password: %s\n", prof.Password)
 	fmt.Printf("IP: %s\n", prof.IPAddress)
 	fmt.Printf("Port: %d\n", prof.Port)
