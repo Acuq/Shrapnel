@@ -28,9 +28,9 @@ type User struct {
 }
 
 var (
-	configDir = "/etc/shrapnel"
-	dataDir   = "/var/lib/shrapnel"
-	binaryPath = "/usr/local/bin/hysteria"
+	configDir = "/opt/shrapnel/config"
+	dataDir   = "/opt/shrapnel/data"
+	binaryPath = "/opt/shrapnel/hysteria"
 	
 	logger *zap.Logger
 	usersDB = map[string]User{} // Simple in-memory user storage
@@ -287,8 +287,32 @@ func main() {
 	// Add commands to user
 	userCmd.AddCommand(addUserCmd, listUsersCmd)
 
+	// System commands
+	systemCmd := &cobra.Command{
+		Use:   "system",
+		Short: "System management commands",
+	}
+
+	// Uninstall command
+	uninstallCmd := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Uninstall Shrapnel completely",
+		Run: func(cmd *cobra.Command, args []string) {
+			force, _ := cmd.Flags().GetBool("force")
+			if err := uninstallShrapnel(force); err != nil {
+				logger.Error("Failed to uninstall", zap.Error(err))
+				fmt.Printf("Error: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println("Shrapnel uninstalled successfully")
+		},
+	}
+	uninstallCmd.Flags().Bool("force", false, "Force uninstall without confirmation")
+
+	systemCmd.AddCommand(uninstallCmd)
+
 	// Add commands to root
-	rootCmd.AddCommand(profileCmd, serviceCmd, userCmd, uriCmd)
+	rootCmd.AddCommand(profileCmd, serviceCmd, userCmd, uriCmd, systemCmd)
 
 	// Execute
 	if err := rootCmd.Execute(); err != nil {
@@ -716,6 +740,85 @@ func generateProfileURI(prof *profile.Profile, showQR bool) error {
 	logger.Info("Profile URI generated successfully",
 		zap.String("profile", prof.ID),
 		zap.String("username", prof.Username))
+	
+	return nil
+}
+
+func uninstallShrapnel(force bool) error {
+	if !force {
+		fmt.Println("This will completely remove Shrapnel from your system:")
+		fmt.Println("- Stop all Shrapnel services")
+		fmt.Println("- Remove Shrapnel binaries (shrapnel, shrapnel-manager, shrapnel-menu)")
+		fmt.Println("- Remove Shrapnel directories (/etc/shrapnel, /var/lib/shrapnel)")
+		fmt.Println("- Remove Shrapnel systemd services")
+		fmt.Println("- Keep Hysteria2 binary and other dependencies")
+		fmt.Println()
+		fmt.Print("Are you sure? (y/n): ")
+		
+		var response string
+		fmt.Scanln(&response)
+		if response != "y" && response != "Y" {
+			return fmt.Errorf("uninstall cancelled")
+		}
+	}
+	
+	fmt.Println("Uninstalling Shrapnel...")
+	
+	// 1. Stop all Shrapnel services
+	fmt.Println("Stopping Shrapnel services...")
+	cmd := exec.Command("systemctl", "stop", "shrapnel-profile-*.service")
+	cmd.Run() // Ignore errors
+	
+	// 2. Disable and remove Shrapnel services
+	fmt.Println("Removing Shrapnel services...")
+	cmd = exec.Command("systemctl", "disable", "shrapnel-profile-*.service")
+	cmd.Run() // Ignore errors
+	
+	// Remove service files
+	serviceFiles, _ := filepath.Glob("/etc/systemd/system/shrapnel-profile-*.service")
+	for _, file := range serviceFiles {
+		os.Remove(file)
+	}
+	
+	// Reload systemd
+	cmd = exec.Command("systemctl", "daemon-reload")
+	cmd.Run()
+	
+	// 3. Remove Shrapnel binaries
+	fmt.Println("Removing Shrapnel binaries...")
+	binaries := []string{
+		"/usr/local/bin/shrapnel",
+		"/usr/local/bin/shrapnel-manager",
+		"/usr/local/bin/shrapnel-menu",
+	}
+	
+	for _, binary := range binaries {
+		if _, err := os.Stat(binary); err == nil {
+			os.Remove(binary)
+			fmt.Printf("  Removed: %s\n", binary)
+		}
+	}
+	
+	// 4. Remove Shrapnel directories
+	fmt.Println("Removing Shrapnel directories...")
+	directories := []string{
+		"/etc/shrapnel",
+		"/var/lib/shrapnel",
+	}
+	
+	for _, dir := range directories {
+		if _, err := os.Stat(dir); err == nil {
+			os.RemoveAll(dir)
+			fmt.Printf("  Removed: %s\n", dir)
+		}
+	}
+	
+	// 5. Reset failed units
+	cmd = exec.Command("systemctl", "reset-failed")
+	cmd.Run()
+	
+	fmt.Println("Shrapnel uninstalled successfully!")
+	fmt.Println("Note: Hysteria2 binary and other dependencies were preserved.")
 	
 	return nil
 }

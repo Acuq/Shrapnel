@@ -12,11 +12,11 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration
-INSTALL_DIR="/usr/local/bin"
-CONFIG_DIR="/etc/shrapnel"
-DATA_DIR="/var/lib/shrapnel"
+INSTALL_DIR="/opt/shrapnel"  # Изолированная директория для Shrapnel
+CONFIG_DIR="/opt/shrapnel/config"
+DATA_DIR="/opt/shrapnel/data"
 SERVICE_DIR="/etc/systemd/system"
-SCRIPT_DIR="/usr/local/bin"
+SCRIPT_DIR="/opt/shrapnel/bin"
 
 echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
 echo -e "${GREEN}        🚀 Shrapnel Multi-IP Proxy Manager Installation 🚀${NC}"
@@ -75,6 +75,7 @@ mkdir -p "$CONFIG_DIR"
 mkdir -p "$DATA_DIR"
 mkdir -p "$SERVICE_DIR"
 mkdir -p "$SCRIPT_DIR"
+mkdir -p "$INSTALL_DIR"
 
 # Install Hysteria2 if not present
 if ! command -v hysteria &> /dev/null; then
@@ -85,6 +86,8 @@ if ! command -v hysteria &> /dev/null; then
     echo -e "${GREEN}✓ Hysteria2 installed${NC}"
 else
     echo -e "${GREEN}✓ Hysteria2 already installed${NC}"
+    # Copy existing hysteria to our isolated directory
+    cp "$(which hysteria)" "$INSTALL_DIR/hysteria"
 fi
 
 # Build and install manager
@@ -114,6 +117,8 @@ echo -e "${GREEN}✓ Console panel installed${NC}"
 
 # Create symlink for easy access
 ln -sf "$SCRIPT_DIR/shrapnel-menu" "$INSTALL_DIR/shrapnel"
+ln -sf "$INSTALL_DIR/shrapnel" "/usr/local/bin/shrapnel"
+ln -sf "$INSTALL_DIR/shrapnel-manager" "/usr/local/bin/shrapnel-manager"
 
 # Set permissions
 chown -R root:root "$CONFIG_DIR"
