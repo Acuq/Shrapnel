@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -410,13 +412,44 @@ func getAllServiceStatus(serviceManager *service.ServiceManager) {
 }
 
 func generateSelfSignedCert(certFile, keyFile, sni string) error {
-	// Placeholder for certificate generation
-	// In production, use proper certificate generation
-	return fmt.Errorf("certificate generation not implemented")
+	// Generate self-signed certificate using OpenSSL
+	cmd := exec.Command("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", 
+		"-keyout", keyFile, 
+		"-out", certFile, 
+		"-days", "365",
+		"-subj", "/CN="+sni)
+	
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to generate self-signed certificate: %w, output: %s", err, string(output))
+	}
+	
+	logger.Info("Self-signed certificate generated successfully", 
+		zap.String("cert", certFile), 
+		zap.String("key", keyFile),
+		zap.String("sni", sni))
+	
+	return nil
 }
 
 func generatePassword() string {
-	// Placeholder for password generation
-	// In production, use proper random password generation
-	return "changeme123"
+	// Generate random password using OpenSSL
+	cmd := exec.Command("openssl", "rand", "-base64", "12")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Fallback to simple password if openssl fails
+		return "shrapnel123"
+	}
+	
+	// Clean up the output (remove newlines and special chars)
+	password := strings.TrimSpace(string(output))
+	password = strings.ReplaceAll(password, "=", "")
+	password = strings.ReplaceAll(password, "+", "")
+	password = strings.ReplaceAll(password, "/", "")
+	
+	if len(password) < 8 {
+		password = "shrapnel123"
+	}
+	
+	return password
 }
