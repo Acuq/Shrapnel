@@ -295,3 +295,50 @@ Environment="SHRAPNEL_PROFILE_ID=%s"
 WantedBy=multi-user.target
 `, profileID, binaryPath, configPath, profileID), nil
 }
+
+// SetupARPProxy sets up ARP proxy for additional IP addresses
+func (m *ServiceManager) SetupARPProxy(ipAddress string) error {
+	// Check if IP is an additional IP (secondary interface)
+	cmd := exec.Command("ip", "addr", "show")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to get IP addresses: %w", err)
+	}
+	
+	ipOutput := string(output)
+	
+	// Check if this IP is on a secondary interface (contains colon)
+	if !strings.Contains(ipOutput, ipAddress+":") {
+		// This is the primary IP, no ARP proxy needed
+		return nil
+	}
+	
+	// Find the interface name
+	lines := strings.Split(ipOutput, "\n")
+	var interfaceName string
+	for _, line := range lines {
+		if strings.Contains(line, ipAddress) {
+			parts := strings.Fields(line)
+			if len(parts) > 1 {
+				interfaceName = strings.TrimSuffix(parts[1], ":")
+				break
+			}
+		}
+	}
+	
+	if interfaceName == "" {
+		return fmt.Errorf("could not find interface for IP %s", ipAddress)
+	}
+	
+	// Remove existing ARP entry if present
+	cmd = exec.Command("ip", "neigh", "del", ipAddress, "dev", interfaceName)
+	cmd.Run() // Ignore errors
+	
+	// Add ARP proxy entry
+	cmd = exec.Command("ip", "neigh", "add", "proxy", ipAddress, "dev", interfaceName)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to add ARP proxy: %w", err)
+	}
+	
+	return nil
+}
