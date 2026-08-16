@@ -465,8 +465,9 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 		SNI:              sni,
 		CertFile:         certFile,
 		KeyFile:          keyFile,
-		AuthType:         "password",
+		AuthType:         "userpass",
 		AuthPassword:     prof.Password, // Use profile's password
+		Username:         prof.Username, // Required for userpass auth
 		ObfsType:         "salamander",  // Enable obfs like Blitz
 		ObfsPassword:     prof.ObfsPassword, // Use profile's obfs password
 		MaxConnections:   prof.Config.MaxConnections,
@@ -519,8 +520,9 @@ func editProfile(registry *profile.ProfileRegistry, generator *config.ConfigGene
 		SNI:              prof.SNI,
 		CertFile:         certFile,
 		KeyFile:          keyFile,
-		AuthType:         "password",
+		AuthType:         "userpass",
 		AuthPassword:     prof.Password,
+		Username:         prof.Username, // Required for userpass auth
 		ObfsType:         "salamander",
 		ObfsPassword:     prof.ObfsPassword,
 		MaxConnections:   prof.Config.MaxConnections,
@@ -918,9 +920,10 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 		}
 		uriParams += "&pinSHA256=" + sha256Pin
 		
-		// Generate Hysteria2 URI - password auth expects only password, not username:password
-		uri := fmt.Sprintf("hy2://%s@%s:%d?%s#IPv4",
-			prof.Password,  // Only password, no username
+		// Server uses userpass auth -> URI auth component must be username:password
+		uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s#IPv4",
+			prof.Username,
+			prof.Password,
 			prof.IPAddress,
 			prof.Port,
 			uriParams)
@@ -963,9 +966,10 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 	uriParams := fmt.Sprintf("obfs=salamander&obfs-password=%s&insecure=1&sni=%s",
 		prof.ObfsPassword, prof.SNI)
 	
-	// Generate Hysteria2 URI - password auth expects only password, not username:password
-	uri := fmt.Sprintf("hy2://%s@%s:%d?%s#IPv4",
-		prof.Password,  // Only password, no username
+	// Server uses userpass auth -> URI auth component must be username:password
+	uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s#IPv4",
+		prof.Username,
+		prof.Password,
 		prof.IPAddress,
 		prof.Port,
 		uriParams)

@@ -31,6 +31,7 @@ type ConfigData struct {
 	// Authentication
 	AuthType     string
 	AuthPassword string
+	Username     string // required when AuthType == "userpass"
 	
 	// Network Settings
 	MaxConnections int
@@ -124,6 +125,8 @@ tls:
 auth:
   type: {{.AuthType}}
   {{if eq .AuthType "password"}}password: {{.AuthPassword}}{{end}}
+  {{if eq .AuthType "userpass"}}userpass:
+    {{.Username}}: {{.AuthPassword}}{{end}}
 
 # QUIC Configuration
 quic:
@@ -250,11 +253,15 @@ func ValidateConfig(data ConfigData) error {
 	// Validate auth type
 	validAuthTypes := map[string]bool{
 		"password": true,
+		"userpass": true,
 		"http":     true,
 		"command":  true,
 	}
 	if !validAuthTypes[data.AuthType] {
 		return fmt.Errorf("invalid auth type: %s", data.AuthType)
+	}
+	if data.AuthType == "userpass" && data.Username == "" {
+		return fmt.Errorf("username is required when auth type is userpass")
 	}
 	
 	// Validate obfs type if specified
