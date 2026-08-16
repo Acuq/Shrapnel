@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -832,7 +833,7 @@ func generateUserURI(profileID, username string, showQR, withSHA256 bool) error 
 	
 	// Add SHA256 pin if requested
 	if withSHA256 {
-		sha256Pin := generateSHA256Pin(profileIP, profilePort)
+		sha256Pin := generateSHA256Pin(profileID)
 		uriParams += "&pinSHA256=" + sha256Pin
 	}
 	
@@ -884,7 +885,7 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 	
 	// Add SHA256 pin if requested
 	if withSHA256 {
-		sha256Pin := generateSHA256Pin(prof.IPAddress, prof.Port)
+		sha256Pin := generateSHA256Pin(prof.ID)
 		uriParams += "&pinSHA256=" + sha256Pin
 	}
 	
@@ -933,22 +934,43 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 	return nil
 }
 
-func generateSHA256Pin(ip string, port int) string {
+func generateSHA256Pin(profileID string) string {
 	// Generate SHA256 pin for the server certificate
-	// For self-signed certificates, we'll generate a placeholder
-	// In production, this should extract the actual certificate SHA256
-	cmd := exec.Command("openssl", "x509", "-in", "/opt/shrapnel/config/cert.pem", "-pubkey", "-noout", "-outform", "pem")
+	// Use the profile's certificate path
+	certPath := filepath.Join(configDir, profileID, "cert.pem")
+	
+	cmd := exec.Command("openssl", "x509", "-in", certPath, "-pubkey", "-noout", "-outform", "pem")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Fallback to placeholder if certificate not found
+		logger.Warn("Failed to extract certificate public key", zap.String("cert", certPath), zap.Error(err))
 		return "64:65:84:A8:03:72:B3:3A:CC:8A:B3:6F:9C:03:7F:B1:20:32:B6:E0:B7:DB:DB:DE:70:EF:44:14:10:CD:1E:E1"
 	}
 	
 	// Generate SHA256 of the public key
-	cmd = exec.Command("openssl", "pkey", "-pubin", "-in", "/dev/stdin", "-outform", "der", "|", "openssl", "dgst", "-sha256", "-binary", "|", "openssl", "enc", "-base64", "-A")
+	cmd = exec.Command("openssl", "pkey", "-pubin", "-in", "/dev/stdin", "-outform", "der")
 	cmd.Stdin = strings.NewReader(string(output))
+	pubkeyDer, err := cmd.CombinedOutput()
+	if err != nil {
+		logger.Warn("Failed to convert public key to DER", zap.Error(err))
+		return "64:65:84:A8:03:72:B3:3A:CC:8A:B3:6F:9C:03:7F:B1:20:32:B6:E0:B7:DB:DB:DE:70:EF:44:14:10:CD:1E:E1"
+	}
+	
+	// Calculate SHA256
+	cmd = exec.Command("openssl", "dgst", "-sha256", "-binary")
+	cmd.Stdin = bytes.NewReader(pubkeyDer)
+	sha256Bytes, err := cmd.CombinedOutput()
+	if err != nil {
+		logger.Warn("Failed to calculate SHA256", zap.Error(err))
+		return "64:65:84:A8:03:72:B3:3A:CC:8A:B3:6F:9C:03:7F:B1:20:32:B6:E0:B7:DB:DB:DE:70:EF:44:14:10:CD:1E:E1"
+	}
+	
+	// Base64 encode
+	cmd = exec.Command("openssl", "enc", "-base64", "-A")
+	cmd.Stdin = bytes.NewReader(sha256Bytes)
 	pinOutput, err := cmd.CombinedOutput()
 	if err != nil {
+		logger.Warn("Failed to base64 encode SHA256", zap.Error(err))
 		return "64:65:84:A8:03:72:B3:3A:CC:8A:B3:6F:9C:03:7F:B1:20:32:B6:E0:B7:DB:DB:DE:70:EF:44:14:10:CD:1E:E1"
 	}
 	
