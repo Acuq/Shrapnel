@@ -134,7 +134,7 @@ func main() {
 			id := args[0]
 			masquerade, _ := cmd.Flags().GetBool("masquerade")
 			
-			if err := editProfile(registry, generator, serviceManager, id, masquerade); err != nil {
+			if err := editProfile(registry, configGenerator, serviceManager, id, masquerade); err != nil {
 				logger.Error("Failed to edit profile", zap.Error(err))
 				fmt.Printf("Error: %v\n", err)
 				os.Exit(1)
