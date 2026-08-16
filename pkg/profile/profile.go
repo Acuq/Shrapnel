@@ -205,11 +205,6 @@ func (r *ProfileRegistry) DeleteProfile(id string) error {
 		return fmt.Errorf("profile not found: %s", id)
 	}
 	
-	// Stop profile if running
-	if profile.Status == "active" {
-		return fmt.Errorf("cannot delete active profile, stop it first")
-	}
-	
 	// Remove profile directory
 	profileDir := filepath.Join(r.configDir, id)
 	if err := os.RemoveAll(profileDir); err != nil {
