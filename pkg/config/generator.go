@@ -172,8 +172,8 @@ outbounds:
   - name: direct
     type: direct
     direct:
-      mode: auto
-      bindIPv4: {{.IPAddress}}
+      mode: 4
+      bindDevice: ens3
       fastOpen: true
 
 # Traffic Statistics
