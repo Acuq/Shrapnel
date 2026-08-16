@@ -451,6 +451,7 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 
 	// Generate configuration with profile credentials (Blitz-style)
 	configData := config.ConfigData{
+		Listen:           fmt.Sprintf(":%d", port), // Listen on all interfaces like Blitz
 		ProfileID:        id,
 		IPAddress:        ip,
 		Port:             port,
@@ -475,14 +476,6 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 	// Create systemd service
 	if err := serviceManager.CreateService(id, configPath, binaryPath); err != nil {
 		return fmt.Errorf("failed to create service: %w", err)
-	}
-
-	// Setup ARP proxy for additional IP addresses
-	if err := serviceManager.SetupARPProxy(ip); err != nil {
-		logger.Warn("Failed to setup ARP proxy for additional IP", 
-			zap.String("ip", ip), 
-			zap.Error(err))
-		// Don't fail if ARP proxy setup fails, service should still work
 	}
 
 	logger.Info("Profile created successfully", 
@@ -512,6 +505,7 @@ func editProfile(registry *profile.ProfileRegistry, generator *config.ConfigGene
 	keyFile := filepath.Join(registry.GetProfileDirectory(id), "key.pem")
 	
 	configData := config.ConfigData{
+		Listen:           fmt.Sprintf(":%d", prof.Port), // Listen on all interfaces like Blitz
 		ProfileID:        id,
 		IPAddress:        prof.IPAddress,
 		Port:             prof.Port,
@@ -546,13 +540,6 @@ func editProfile(registry *profile.ProfileRegistry, generator *config.ConfigGene
 	
 	// Restart service if active
 	serviceManager.RestartService(id)
-	
-	// Re-apply ARP proxy for additional IP addresses
-	if err := serviceManager.SetupARPProxy(prof.IPAddress); err != nil {
-		logger.Warn("Failed to re-apply ARP proxy for additional IP", 
-			zap.String("ip", prof.IPAddress), 
-			zap.Error(err))
-	}
 	
 	logger.Info("Profile edited successfully",
 		zap.String("id", id),

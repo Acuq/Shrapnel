@@ -43,6 +43,9 @@ type ConfigData struct {
 	// Outbound Settings
 	OutboundBindIPv4 string
 	OutboundBindIPv6 string
+	
+	// Use specific IP for listening (for additional IPs)
+	UseSpecificIP bool
 }
 
 // NewConfigGenerator creates a new config generator
@@ -169,9 +172,8 @@ outbounds:
   - name: direct
     type: direct
     direct:
-      mode: auto
-      bindIPv4: {{.OutboundBindIPv4}}
-      {{if .OutboundBindIPv6}}bindIPv6: {{.OutboundBindIPv6}}{{end}}
+      mode: 4
+      bindDevice: ens3
       fastOpen: true
 
 # Traffic Statistics
