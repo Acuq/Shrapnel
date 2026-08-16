@@ -340,5 +340,18 @@ func (m *ServiceManager) SetupARPProxy(ipAddress string) error {
 		return fmt.Errorf("failed to add ARP proxy: %w", err)
 	}
 	
+	// Enable proxy_arp on the interface
+	cmd = exec.Command("sysctl", "-w", fmt.Sprintf("net.ipv4.conf.%s.proxy_arp=1", interfaceName))
+	if err := cmd.Run(); err != nil {
+		// Log warning but don't fail
+		fmt.Printf("Warning: failed to enable proxy_arp on %s: %v\n", interfaceName, err)
+	}
+	
+	// Enable IP forwarding
+	cmd = exec.Command("sysctl", "-w", "net.ipv4.ip_forward=1")
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Warning: failed to enable IP forwarding: %v\n", err)
+	}
+	
 	return nil
 }

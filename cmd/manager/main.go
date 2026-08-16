@@ -350,6 +350,21 @@ func main() {
 	}
 	diagCmd.Flags().String("profile", "", "Profile ID to diagnose")
 
+	// Network diagnostics command
+	networkDiagCmd := &cobra.Command{
+		Use:   "network-check",
+		Short: "Check network configuration for additional IPs",
+		Run: func(cmd *cobra.Command, args []string) {
+			ip, _ := cmd.Flags().GetString("ip")
+			if err := checkNetworkConfiguration(ip); err != nil {
+				logger.Error("Network check failed", zap.Error(err))
+				fmt.Printf("Error: %v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+	networkDiagCmd.Flags().String("ip", "", "IP address to check")
+
 	// Update profiles command
 	updateProfilesCmd := &cobra.Command{
 		Use:   "update-profiles",
@@ -408,7 +423,7 @@ func main() {
 		},
 	}
 
-	systemCmd.AddCommand(uninstallCmd, updateProfilesCmd, diagCmd)
+	systemCmd.AddCommand(uninstallCmd, updateProfilesCmd, diagCmd, networkDiagCmd)
 
 	// Add commands to root
 	rootCmd.AddCommand(profileCmd, serviceCmd, userCmd, uriCmd, systemCmd)
@@ -1377,4 +1392,76 @@ func updateOldProfiles() {
 	if updatedCount > 0 {
 		logger.Info("Updated old profiles with credentials", zap.Int("count", updatedCount))
 	}
+}
+
+func checkNetworkConfiguration(ip string) error {
+	fmt.Println("========================================")
+	fmt.Println("         Network Configuration Check")
+	fmt.Println("========================================")
+	
+	if ip == "" {
+		return fmt.Errorf("IP address is required")
+	}
+	
+	// Check if IP exists on the system
+	cmd := exec.Command("ip", "addr", "show")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to get IP addresses: %w", err)
+	}
+	
+	ipOutput := string(output)
+	if !strings.Contains(ipOutput, ip) {
+		return fmt.Errorf("IP %s not found on system", ip)
+	}
+	
+	fmt.Printf("✅ IP %s exists on system\n", ip)
+	
+	// Check if it's a secondary interface
+	if strings.Contains(ipOutput, ip+":") {
+		fmt.Printf("⚠️  IP is on secondary interface (ens3:0)\n")
+	} else {
+		fmt.Printf("✅ IP is on primary interface\n")
+	}
+	
+	// Check ARP table
+	cmd = exec.Command("ip", "neigh", "show")
+	output, err = cmd.CombinedOutput()
+	if err == nil && strings.Contains(string(output), ip) {
+		fmt.Printf("✅ ARP entry exists for %s\n", ip)
+	} else {
+		fmt.Printf("❌ No ARP entry found for %s\n", ip)
+	}
+	
+	// Check if proxy_arp is enabled
+	cmd = exec.Command("sysctl", "net.ipv4.conf.ens3.proxy_arp")
+	output, err = cmd.CombinedOutput()
+	if err == nil {
+		fmt.Printf("proxy_arp setting: %s\n", strings.TrimSpace(string(output)))
+	}
+	
+	// Check IP forwarding
+	cmd = exec.Command("sysctl", "net.ipv4.ip_forward")
+	output, err = cmd.CombinedOutput()
+	if err == nil {
+		fmt.Printf("IP forwarding: %s\n", strings.TrimSpace(string(output)))
+	}
+	
+	// Check if anything is listening on the IP
+	cmd = exec.Command("ss", "-tulpn")
+	output, err = cmd.CombinedOutput()
+	if err == nil && strings.Contains(string(output), ip) {
+		fmt.Printf("✅ Services listening on %s:\n", ip)
+	} else {
+		fmt.Printf("❌ No services listening on %s\n", ip)
+	}
+	
+	fmt.Println("========================================")
+	fmt.Println("Configuration complete. If IP is still not accessible:")
+	fmt.Println("1. Check if IP is properly routed by your hosting provider")
+	fmt.Println("2. Check if there are any firewall rules blocking the IP")
+	fmt.Println("3. Contact your hosting provider about additional IP routing")
+	fmt.Println("========================================")
+	
+	return nil
 }
