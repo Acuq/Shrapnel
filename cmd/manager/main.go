@@ -473,6 +473,7 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 		CongestionControl: prof.Config.CongestionControl,
 		EnableSpeedTest:  prof.Config.EnableSpeedTest,
 		EnableMasquerade: enableMasquerade, // Use the parameter
+		OutboundBindIPv4: ip, // Bind outbound traffic to the same IP
 	}
 
 	configPath := registry.GetProfileConfigPath(id)
@@ -527,6 +528,7 @@ func editProfile(registry *profile.ProfileRegistry, generator *config.ConfigGene
 		CongestionControl: prof.Config.CongestionControl,
 		EnableSpeedTest:  prof.Config.EnableSpeedTest,
 		EnableMasquerade: prof.Config.EnableMasquerade,
+		OutboundBindIPv4: prof.IPAddress, // Bind outbound traffic to the same IP
 	}
 	
 	configPath := registry.GetProfileConfigPath(id)

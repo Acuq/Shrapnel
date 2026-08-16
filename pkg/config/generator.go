@@ -173,6 +173,7 @@ outbounds:
     type: direct
     direct:
       mode: auto
+      bindIPv4: {{.IPAddress}}
       fastOpen: true
 
 # Traffic Statistics
