@@ -310,7 +310,7 @@ show_profile_uri() {
         qr_flag="--qr"
     fi
     
-    read -p "Include SHA256 pin? (y/n): " show_sha256
+    read -p "Include SHA256 pin? (y/n, default: n): " show_sha256
     sha256_flag=""
     if [[ "$show_sha256" =~ ^[Yy]$ ]]; then
         sha256_flag="--sha256"
