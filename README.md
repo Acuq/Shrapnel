@@ -35,41 +35,13 @@ sudo bash scripts/install.sh
 # Launch console panel
 sudo shrapnel
 
-# Or via CLI
-sudo shrapnel-manager profile create --id client1 --name "Client 1" --ip 192.168.1.100 --port 443 --sni example.com
-sudo shrapnel-manager service start client1
-```
+
 
 ## 📖 Documentation
 
-- [Full Documentation](README-MULTI-IP.md) - Comprehensive guide
-- [Quick Start](QUICKSTART.md) - Step-by-step tutorial
+
 - [Architecture](multi-ip-architecture.md) - Technical details
-- [Implementation Status](IMPLEMENTATION_STATUS.md) - Current status
 
-## 💡 Usage Examples
-
-### Multi-tenant Provider
-
-```bash
-# Create a profile for each client
-sudo shrapnel-manager profile create --id client1 --name "Client 1" --ip 192.168.1.100 --port 443 --sni client1.example.com
-sudo shrapnel-manager profile create --id client2 --name "Client 2" --ip 192.168.1.101 --port 443 --sni client2.example.com
-
-# Start services
-sudo shrapnel-manager service start client1
-sudo shrapnel-manager service start client2
-```
-
-### Load Balancing
-
-```bash
-# Create multiple profiles for load distribution
-for i in {1..3}; do
-    sudo shrapnel-manager profile create --id "lb$i" --name "Load Balancer $i" --ip "192.168.1.$((100+i))" --port 443 --sni lb.example.com
-    sudo shrapnel-manager service start "lb$i"
-done
-```
 
 ## 🏗️ Architecture
 
