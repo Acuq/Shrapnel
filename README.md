@@ -8,7 +8,9 @@
 
 ## 🎯 What is Shrapnel?
 
-Shrapnel is a system for managing multiple isolated Hysteria2 profiles on a single server. Each profile operates as an independent "shard" with its own IP address, users, and settings, providing complete isolation and management flexibility.
+Shrapnel lets you run multiple independent Hysteria2 servers on a single VPS, each bound to its own dedicated IP address. Instead of juggling manual configs, systemd units, and certificates by hand, you manage everything — creating, editing, starting/stopping, and connecting to profiles — through one CLI and an interactive console menu.
+
+Each profile is a fully separate Hysteria2 instance: its own IP, port, TLS certificate, obfuscation password, and auth credentials — so traffic for one profile never mixes with another, and you can run as many as you have IPs for.
 
 ## ✨ Key Features
 
