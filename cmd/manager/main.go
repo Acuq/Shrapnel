@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -1008,58 +1007,36 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 }
 
 func generateSHA256Pin(profileID string) (string, error) {
-	// Generate SHA256 pin for the server certificate
-	// Use the profile's certificate path
+	// hysteria2's pinSHA256 is the SHA256 fingerprint of the whole leaf
+	// certificate (as openssl's own `x509 -fingerprint` computes it) —
+	// NOT a hash of just the public key (SPKI). These are different
+	// values; using the wrong one silently produces a pin that will
+	// never match what any hysteria2 client computes from the real cert.
+	// Reference: https://v2.hysteria.network/docs/advanced/Full-Client-Config/
 	certPath := filepath.Join(configDir, profileID, "cert.pem")
-	
-	cmd := exec.Command("openssl", "x509", "-in", certPath, "-pubkey", "-noout", "-outform", "pem")
+
+	if _, err := os.Stat(certPath); err != nil {
+		return "", fmt.Errorf("certificate not found at %s: %w", certPath, err)
+	}
+
+	cmd := exec.Command("openssl", "x509", "-noout", "-fingerprint", "-sha256", "-in", certPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to extract certificate public key: %w", err)
+		return "", fmt.Errorf("failed to compute certificate fingerprint: %w, output: %s", err, string(output))
 	}
-	
-	// Generate SHA256 of the public key in hex format
-	cmd = exec.Command("openssl", "pkey", "-pubin", "-in", "/dev/stdin", "-pubout", "-outform", "der")
-	cmd.Stdin = strings.NewReader(string(output))
-	pubkeyDer, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("failed to convert public key to DER: %w", err)
-	}
-	
-	// Calculate SHA256 and get hex output
-	cmd = exec.Command("openssl", "dgst", "-sha256", "-hex")
-	cmd.Stdin = bytes.NewReader(pubkeyDer)
-	sha256Hex, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("failed to calculate SHA256: %w", err)
-	}
-	
-	// Parse hex output (format: "SHA256(...) = hexstring")
-	hexOutput := string(sha256Hex)
-	parts := strings.Split(hexOutput, "=")
+
+	// Output format: "sha256 Fingerprint=AA:BB:CC:...:ZZ"
+	parts := strings.SplitN(string(output), "=", 2)
 	if len(parts) < 2 {
-		return "", fmt.Errorf("failed to parse SHA256 output: %s", hexOutput)
+		return "", fmt.Errorf("unexpected openssl fingerprint output format: %s", string(output))
 	}
-	
-	hexString := strings.TrimSpace(parts[1])
-	
-	// Remove any spaces and convert to uppercase
-	hexString = strings.ReplaceAll(hexString, " ", "")
-	hexString = strings.ToUpper(hexString)
-	
-	// Format as SHA256 pin (split into 2-character groups with colons)
-	var formattedPin string
-	for i := 0; i < len(hexString) && i < 64; i += 2 {
-		if i > 0 {
-			formattedPin += ":"
-		}
-		if i+2 <= len(hexString) {
-			formattedPin += hexString[i:i+2]
-		} else {
-			formattedPin += hexString[i:]
-		}
+
+	formattedPin := strings.ToUpper(strings.TrimSpace(parts[1]))
+	if len(strings.ReplaceAll(formattedPin, ":", "")) != 64 {
+		return "", fmt.Errorf("unexpected fingerprint length in output: %s", formattedPin)
 	}
-	
+
+
 	return formattedPin, nil
 }
 
