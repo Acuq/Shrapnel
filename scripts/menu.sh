@@ -127,18 +127,22 @@ create_profile() {
     echo -e "${CYAN}Create New Profile${NC}"
     echo -e "${CYAN}─────────────────────────────────────────────────────────────────${NC}"
     
-    # Profile ID
+    # Profile Name (used internally as the profile ID too)
     while true; do
-        read -p "Enter Profile ID (alphanumeric, no spaces): " profile_id
-        if [[ "$profile_id" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-            break
+        read -p "Enter Profile Name (alphanumeric, no spaces): " profile_id
+        if [[ -z "$profile_id" ]]; then
+            echo -e "${RED}Profile Name cannot be empty.${NC}"
+        elif [[ "$profile_id" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            if $MANAGER_PATH profile get "$profile_id" &>/dev/null; then
+                echo -e "${RED}A profile named '${profile_id}' already exists. Choose another name.${NC}"
+            else
+                break
+            fi
         else
-            echo -e "${RED}Invalid ID. Use only letters, numbers, hyphens, and underscores.${NC}"
+            echo -e "${RED}Invalid name. Use only letters, numbers, hyphens, and underscores.${NC}"
         fi
     done
-    
-    # Profile Name
-    read -p "Enter Profile Name: " profile_name
+    profile_name="$profile_id"
     
     # IP Address
     while true; do
@@ -208,10 +212,10 @@ list_profiles() {
 
 # View profile details
 view_profile() {
-    read -p "Enter Profile ID: " profile_id
+    read -p "Enter Profile Name: " profile_id
     
     if [ -z "$profile_id" ]; then
-        echo -e "${RED}Profile ID cannot be empty${NC}"
+        echo -e "${RED}Profile Name cannot be empty${NC}"
         return
     fi
     
@@ -220,10 +224,10 @@ view_profile() {
 
 # Edit profile
 edit_profile() {
-    read -p "Enter Profile ID to edit: " profile_id
+    read -p "Enter Profile Name to edit: " profile_id
     
     if [ -z "$profile_id" ]; then
-        echo -e "${RED}Profile ID cannot be empty${NC}"
+        echo -e "${RED}Profile Name cannot be empty${NC}"
         return
     fi
     
@@ -250,10 +254,10 @@ edit_profile() {
 
 # Delete profile
 delete_profile() {
-    read -p "Enter Profile ID to delete: " profile_id
+    read -p "Enter Profile Name to delete: " profile_id
     
     if [ -z "$profile_id" ]; then
-        echo -e "${RED}Profile ID cannot be empty${NC}"
+        echo -e "${RED}Profile Name cannot be empty${NC}"
         return
     fi
     
@@ -288,10 +292,10 @@ update_all_profiles() {
 
 # Show profile URI
 show_profile_uri() {
-    read -p "Enter Profile ID: " profile_id
+    read -p "Enter Profile Name: " profile_id
     
     if [ -z "$profile_id" ]; then
-        echo -e "${RED}Profile ID cannot be empty${NC}"
+        echo -e "${RED}Profile Name cannot be empty${NC}"
         return
     fi
     
@@ -348,10 +352,10 @@ service_menu() {
 
 # Start service
 start_service() {
-    read -p "Enter Profile ID: " profile_id
+    read -p "Enter Profile Name: " profile_id
     
     if [ -z "$profile_id" ]; then
-        echo -e "${RED}Profile ID cannot be empty${NC}"
+        echo -e "${RED}Profile Name cannot be empty${NC}"
         return
     fi
     
@@ -364,10 +368,10 @@ start_service() {
 
 # Stop service
 stop_service() {
-    read -p "Enter Profile ID: " profile_id
+    read -p "Enter Profile Name: " profile_id
     
     if [ -z "$profile_id" ]; then
-        echo -e "${RED}Profile ID cannot be empty${NC}"
+        echo -e "${RED}Profile Name cannot be empty${NC}"
         return
     fi
     
@@ -380,10 +384,10 @@ stop_service() {
 
 # Restart service
 restart_service() {
-    read -p "Enter Profile ID: " profile_id
+    read -p "Enter Profile Name: " profile_id
     
     if [ -z "$profile_id" ]; then
-        echo -e "${RED}Profile ID cannot be empty${NC}"
+        echo -e "${RED}Profile Name cannot be empty${NC}"
         return
     fi
     
@@ -396,10 +400,10 @@ restart_service() {
 
 # View service status
 view_service_status() {
-    read -p "Enter Profile ID: " profile_id
+    read -p "Enter Profile Name: " profile_id
     
     if [ -z "$profile_id" ]; then
-        echo -e "${RED}Profile ID cannot be empty${NC}"
+        echo -e "${RED}Profile Name cannot be empty${NC}"
         return
     fi
     
@@ -408,10 +412,10 @@ view_service_status() {
 
 # View service logs
 view_service_logs() {
-    read -p "Enter Profile ID: " profile_id
+    read -p "Enter Profile Name: " profile_id
     
     if [ -z "$profile_id" ]; then
-        echo -e "${RED}Profile ID cannot be empty${NC}"
+        echo -e "${RED}Profile Name cannot be empty${NC}"
         return
     fi
     
@@ -496,11 +500,11 @@ check_ip_availability() {
 
 # Assign IP to profile
 assign_ip_to_profile() {
-    read -p "Enter Profile ID: " profile_id
+    read -p "Enter Profile Name: " profile_id
     read -p "Enter new IP Address: " ip_address
     
     if [ -z "$profile_id" ] || [ -z "$ip_address" ]; then
-        echo -e "${RED}Profile ID and IP address cannot be empty${NC}"
+        echo -e "${RED}Profile Name and IP address cannot be empty${NC}"
         return
     fi
     
