@@ -16,8 +16,6 @@ Shrapnel is a system for managing multiple isolated Hysteria2 profiles on a sing
 - **🛡️ Complete Isolation** - Each profile has its own configuration, users, and statistics
 - **🎛️ Console Panel** - User-friendly management interface in Blitz Panel style
 - **⚙️ Service Management** - Automatic systemd service management
-- **📊 Traffic Monitoring** - Separate statistics for each profile
-- **👥 User Management** - User management within each profile
 
 ## 🚀 Quick Start
 
@@ -115,22 +113,7 @@ MIT License (inherited from original Hysteria2)
 - Original Hysteria2 project: https://github.com/apernet/hysteria
 - Blitz Panel for console interface inspiration: https://github.com/ReturnFI/Blitz
 
-## 🗺️ Roadmap
 
-- [ ] Full user database implementation
-- [ ] Web management interface
-- [ ] IPv6 support
-- [ ] Automatic SSL certificate acquisition (Let's Encrypt)
-- [ ] WARP integration
-- [ ] Telegram bot for notifications
-- [ ] Backup and restore functionality
-- [ ] API for integration with other systems
-
-## 📞 Support
-
-For questions and suggestions:
-- Create an issue in the repository
-- Check the documentation in the project directory
 
 ---
 
