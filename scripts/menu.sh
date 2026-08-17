@@ -133,7 +133,7 @@ create_profile() {
         if [[ -z "$profile_id" ]]; then
             echo -e "${RED}Profile Name cannot be empty.${NC}"
         elif [[ "$profile_id" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-            if $MANAGER_PATH profile get "$profile_id" &>/dev/null; then
+            if $MANAGER_PATH profile get "$profile_id" 2>&1 | grep -q "^ID:"; then
                 echo -e "${RED}A profile named '${profile_id}' already exists. Choose another name.${NC}"
             else
                 break

@@ -579,7 +579,7 @@ func getProfile(registry *profile.ProfileRegistry, id string) {
 	prof, err := registry.GetProfile(id)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
-		return
+		os.Exit(1)
 	}
 
 	fmt.Printf("Profile Details:\n")
