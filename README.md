@@ -36,6 +36,7 @@ sudo bash scripts/install.sh
 sudo shrapnel
 
 
+```
 
 ## 📖 Documentation
 
