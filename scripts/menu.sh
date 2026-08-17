@@ -4,7 +4,7 @@
 # Based on Blitz Panel design for consistency
 
 # Configuration
-CONFIG_DIR="/etc/shrapnel"
+CONFIG_DIR="/opt/shrapnel/config"
 DATA_DIR="/var/lib/shrapnel"
 BINARY_PATH="/usr/local/bin/hysteria"
 MANAGER_PATH="/usr/local/bin/shrapnel-manager"
@@ -206,11 +206,6 @@ create_profile() {
 list_profiles() {
     echo -e "${CYAN}Existing Profiles${NC}"
     echo -e "${CYAN}─────────────────────────────────────────────────────────────────${NC}"
-    
-    if [ "$(get_profile_count)" -eq 0 ]; then
-        echo -e "${YELLOW}No profiles found${NC}"
-        return
-    fi
     
     $MANAGER_PATH profile list
 }
