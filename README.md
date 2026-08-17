@@ -34,8 +34,6 @@ sudo bash scripts/install.sh
 ```bash
 # Launch console panel
 sudo shrapnel
-
-
 ```
 
 ## 📖 Documentation
