@@ -66,8 +66,6 @@ main_menu() {
         echo -e "${GREEN}[1]${NC} Profile Management"
         echo -e "${GREEN}[2]${NC} Service Management"
         echo -e "${GREEN}[3]${NC} IP Management"
-        echo -e "${GREEN}[4]${NC} Traffic Monitoring"
-        echo -e "${GREEN}[5]${NC} User Management"
         echo -e "${RED}[6]${NC} Uninstall Shrapnel"
         echo -e "${RED}[0]${NC} Exit"
         echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
@@ -78,8 +76,6 @@ main_menu() {
             1) profile_menu ;;
             2) service_menu ;;
             3) ip_menu ;;
-            4) traffic_menu ;;
-            5) user_menu ;;
             6) uninstall_shrapnel ;;
             0) exit 0 ;;
             *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
@@ -510,168 +506,6 @@ assign_ip_to_profile() {
     
     echo -e "${YELLOW}This feature requires profile reconfiguration${NC}"
     echo "For now, please delete and recreate the profile with the new IP"
-}
-
-# Traffic monitoring menu
-traffic_menu() {
-    while true; do
-        clear
-        display_system_info
-        echo -e "${YELLOW}                   ☼ Traffic Monitoring ☼${NC}"
-        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-        echo -e "${GREEN}[1]${NC} View Profile Traffic"
-        echo -e "${GREEN}[2]${NC} View All Profiles Traffic"
-        echo -e "${GREEN}[3]${NC} Reset Profile Traffic"
-        echo -e "${RED}[0]${NC} Back to Main Menu"
-        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-        echo -ne "${YELLOW}➜ Enter your option: ${NC}"
-        
-        read -r choice
-        case $choice in
-            1) view_profile_traffic ;;
-            2) view_all_traffic ;;
-            3) reset_profile_traffic ;;
-            0) break ;;
-            *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
-        esac
-        if [ "$choice" != "0" ]; then
-            echo -e "${YELLOW}Press Enter to continue...${NC}"
-            read -r
-        fi
-    done
-}
-
-# View profile traffic
-view_profile_traffic() {
-    read -p "Enter Profile ID: " profile_id
-    
-    if [ -z "$profile_id" ]; then
-        echo -e "${RED}Profile ID cannot be empty${NC}"
-        return
-    fi
-    
-    # This would call the manager to get traffic stats
-    echo -e "${YELLOW}Traffic statistics for profile: $profile_id${NC}"
-    echo "Implementation pending - requires traffic stats collection"
-}
-
-# View all traffic
-view_all_traffic() {
-    echo -e "${CYAN}Traffic Statistics for All Profiles${NC}"
-    echo -e "${CYAN}─────────────────────────────────────────────────────────────────${NC}"
-    
-    # This would call the manager to get all traffic stats
-    echo "Implementation pending - requires traffic stats collection"
-}
-
-# Reset profile traffic
-reset_profile_traffic() {
-    read -p "Enter Profile ID: " profile_id
-    
-    if [ -z "$profile_id" ]; then
-        echo -e "${RED}Profile ID cannot be empty${NC}"
-        return
-    fi
-    
-    read -p "Are you sure you want to reset traffic stats? (y/n): " confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo "Cancelled"
-        return
-    fi
-    
-    echo -e "${YELLOW}Resetting traffic stats...${NC}"
-    echo "Implementation pending"
-}
-
-# User management menu
-user_menu() {
-    while true; do
-        clear
-        display_system_info
-        echo -e "${YELLOW}                   ☼ User Management ☼${NC}"
-        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-        echo -e "${GREEN}[1]${NC} Add User to Profile"
-        echo -e "${GREEN}[2]${NC} List Users in Profile"
-        echo -e "${GREEN}[3]${NC} Remove User from Profile"
-        echo -e "${GREEN}[4]${NC} Reset User Traffic"
-        echo -e "${RED}[0]${NC} Back to Main Menu"
-        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-        echo -ne "${YELLOW}➜ Enter your option: ${NC}"
-        
-        read -r choice
-        case $choice in
-            1) add_user ;;
-            2) list_users ;;
-            3) remove_user ;;
-            4) reset_user_traffic ;;
-            0) break ;;
-            *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
-        esac
-        if [ "$choice" != "0" ]; then
-            echo -e "${YELLOW}Press Enter to continue...${NC}"
-            read -r
-        fi
-    done
-}
-
-# Add user
-add_user() {
-    read -p "Enter Profile ID: " profile_id
-    
-    if [ -z "$profile_id" ]; then
-        echo -e "${RED}Profile ID cannot be empty${NC}"
-        return
-    fi
-    
-    echo -e "${YELLOW}User management for profile: $profile_id${NC}"
-    echo "Implementation pending - requires user database integration"
-}
-
-# List users
-list_users() {
-    read -p "Enter Profile ID: " profile_id
-    
-    if [ -z "$profile_id" ]; then
-        echo -e "${RED}Profile ID cannot be empty${NC}"
-        return
-    fi
-    
-    echo -e "${YELLOW}Users in profile: $profile_id${NC}"
-    echo "Implementation pending - requires user database integration"
-}
-
-# Remove user
-remove_user() {
-    read -p "Enter Profile ID: " profile_id
-    read -p "Enter Username: " username
-    
-    if [ -z "$profile_id" ] || [ -z "$username" ]; then
-        echo -e "${RED}Profile ID and Username cannot be empty${NC}"
-        return
-    fi
-    
-    echo -e "${YELLOW}Removing user: $username from profile: $profile_id${NC}"
-    echo "Implementation pending - requires user database integration"
-}
-
-# Reset user traffic
-reset_user_traffic() {
-    read -p "Enter Profile ID: " profile_id
-    read -p "Enter Username: " username
-    
-    if [ -z "$profile_id" ] || [ -z "$username" ]; then
-        echo -e "${RED}Profile ID and Username cannot be empty${NC}"
-        return
-    fi
-    
-    read -p "Are you sure you want to reset traffic for this user? (y/n): " confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo "Cancelled"
-        return
-    fi
-    
-    echo -e "${YELLOW}Resetting traffic for user: $username${NC}"
-    echo "Implementation pending - requires user database integration"
 }
 
 # Helper functions for profile editing
