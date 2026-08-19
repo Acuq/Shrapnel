@@ -85,13 +85,11 @@ func (g *ConfigGenerator) GenerateConfig(data ConfigData, outputPath string) err
 		}
 	}
 	
-	// Set outbound binding
+	// Set outbound binding - only for IPv4 to avoid YAML issues
 	if data.OutboundBindIPv4 == "" && data.IPAddress != "" {
 		data.OutboundBindIPv4 = data.IPAddress
 	}
-	if data.OutboundBindIPv6 == "" && data.IPv6Address != "" {
-		data.OutboundBindIPv6 = data.IPv6Address
-	}
+	// Skip outbound binding for IPv6 profiles to avoid YAML parsing issues
 	
 	// Set outbound binding based on IP type
 	if data.IPv6Address != "" {

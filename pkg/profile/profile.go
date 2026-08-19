@@ -133,9 +133,7 @@ func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, useIPv6 bool
 	// Set IP address based on type
 	if useIPv6 {
 		profile.IPv6Address = ipAddress
-		// For compatibility, keep IPAddress as the IPv6 address too
-		// This avoids breaking config generation that expects non-empty IPAddress
-		profile.IPAddress = ipAddress
+		profile.IPAddress = "" // Set IPv4 to empty for IPv6-only
 	} else {
 		profile.IPAddress = ipAddress
 		profile.IPv6Address = "" // Clear IPv6 for IPv4-only profiles
