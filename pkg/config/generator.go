@@ -74,28 +74,17 @@ func (g *ConfigGenerator) GenerateConfig(data ConfigData, outputPath string) err
 		data.AuthType = "password"
 	}
 	
-	// Generate listen address (IPv6 requires brackets)
+	// Generate listen address
 	if data.Listen == "" {
-		if data.IPv6Address != "" {
-			data.Listen = fmt.Sprintf("[%s]:%d", data.IPv6Address, data.Port)
-		} else {
-			data.Listen = fmt.Sprintf("%s:%d", data.IPAddress, data.Port)
-		}
+		data.Listen = fmt.Sprintf("%s:%d", data.IPAddress, data.Port)
 	}
 	
-	// Set outbound binding based on IP type
-	if data.IPv6Address != "" {
-		// IPv6 profile
-		if data.OutboundBindIPv6 == "" {
-			data.OutboundBindIPv6 = data.IPv6Address
-		}
-		data.OutboundBindIPv4 = "" // Clear IPv4 for IPv6-only profiles
-	} else {
-		// IPv4 profile
-		if data.OutboundBindIPv4 == "" {
-			data.OutboundBindIPv4 = data.IPAddress
-		}
-		data.OutboundBindIPv6 = "" // Clear IPv6 for IPv4-only profiles
+	// Set outbound binding
+	if data.OutboundBindIPv4 == "" {
+		data.OutboundBindIPv4 = data.IPAddress
+	}
+	if data.OutboundBindIPv6 == "" && data.IPv6Address != "" {
+		data.OutboundBindIPv6 = data.IPv6Address
 	}
 	
 	// Generate stats port if not set
@@ -187,8 +176,7 @@ outbounds:
     type: direct
     direct:
       mode: auto
-      {{if .OutboundBindIPv4}}bindIPv4: {{.OutboundBindIPv4}}{{end}}
-      {{if .OutboundBindIPv6}}bindIPv6: {{.OutboundBindIPv6}}{{end}}
+      bindIPv4: {{.IPAddress}}
       fastOpen: true
 
 # Traffic Statistics
