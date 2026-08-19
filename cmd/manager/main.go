@@ -475,7 +475,7 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 	configData := config.ConfigData{
 		Listen:           listenAddr,
 		ProfileID:        id,
-		IPAddress:        ip,
+		IPAddress:        func() string { if !useIPv6 { return ip } else { return "" } }(),
 		IPv6Address:     func() string { if useIPv6 { return ip } else { return "" } }(),
 		Port:             port,
 		SNI:              sni,
@@ -980,12 +980,17 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 		uriParams += "&pinSHA256=" + sha256Pin
 		
 		// Server uses userpass auth -> URI auth component must be username:password
-		uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s#IPv4",
+		uriFragment := "#IPv4"
+		if ipType == "IPv6" {
+			uriFragment = "#IPv6"
+		}
+		uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s%s",
 			prof.Username,
 			prof.Password,
 			formattedIP,
 			prof.Port,
-			uriParams)
+			uriParams,
+			uriFragment)
 		
 		fmt.Println("========================================")
 		fmt.Printf("Connection URI for Profile: %s\n", prof.ID)
@@ -1028,12 +1033,17 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 		prof.ObfsPassword, prof.SNI)
 	
 	// Server uses userpass auth -> URI auth component must be username:password
-	uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s#IPv4",
+	uriFragment := "#IPv4"
+	if ipType == "IPv6" {
+		uriFragment = "#IPv6"
+	}
+	uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s%s",
 		prof.Username,
 		prof.Password,
 		formattedIP,
 		prof.Port,
-		uriParams)
+		uriParams,
+		uriFragment)
 	
 	fmt.Println("========================================")
 	fmt.Printf("Connection URI for Profile: %s\n", prof.ID)

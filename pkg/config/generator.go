@@ -89,15 +89,15 @@ func (g *ConfigGenerator) GenerateConfig(data ConfigData, outputPath string) err
 		if data.OutboundBindIPv6 == "" {
 			data.OutboundBindIPv6 = data.IPv6Address
 		}
-		// Keep IPv4 binding for compatibility
-		if data.OutboundBindIPv4 == "" {
-			data.OutboundBindIPv4 = data.IPAddress
-		}
+		// Clear IPv4 binding for IPv6-only profiles
+		data.OutboundBindIPv4 = ""
 	} else {
 		// IPv4 profile - original logic
 		if data.OutboundBindIPv4 == "" {
 			data.OutboundBindIPv4 = data.IPAddress
 		}
+		// Clear IPv6 binding for IPv4-only profiles
+		data.OutboundBindIPv6 = ""
 	}
 	
 	// Generate stats port if not set
