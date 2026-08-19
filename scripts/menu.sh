@@ -144,19 +144,81 @@ create_profile() {
     done
     profile_name="$profile_id"
     
-    # IP Address
-    while true; do
-        read -p "Enter IP Address: " ip_address
-        if [[ "$ip_address" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-            if [[ $(echo "$ip_address" | awk -F. '{for (i=1;i<=NF;i++) if ($i>255) exit 1}') ]]; then
-                echo -e "${RED}Invalid IPv4 address. Values must be between 0 and 255.${NC}"
+    # Check for IPv6 availability
+    has_ipv6=$(ip -6 addr show | grep -oP '(?<=inet6\s)[0-9a-fA-F:]+' | grep -v '^::1' | grep -v '^fe80' | head -1)
+    has_ipv4=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
+    
+    # IP Type Selection
+    ip_type="ipv4"
+    if [ -n "$has_ipv6" ] && [ -n "$has_ipv4" ]; then
+        echo ""
+        echo "Available IP types:"
+        echo "1) IPv4"
+        echo "2) IPv6"
+        while true; do
+            read -p "Select IP type (1-2, default: 1): " ip_choice
+            ip_choice=${ip_choice:-1}
+            case $ip_choice in
+                1) ip_type="ipv4"; break ;;
+                2) ip_type="ipv6"; break ;;
+                *) echo -e "${RED}Invalid choice. Enter 1 or 2.${NC}" ;;
+            esac
+        done
+    elif [ -n "$has_ipv6" ]; then
+        echo -e "${YELLOW}Note: Only IPv6 is available on this system${NC}"
+        ip_type="ipv6"
+    else
+        echo -e "${YELLOW}Note: Only IPv4 is available on this system${NC}"
+        ip_type="ipv4"
+    fi
+    
+    # IP Address input based on type
+    if [ "$ip_type" == "ipv4" ]; then
+        while true; do
+            read -p "Enter IPv4 Address: " ip_address
+            if [[ "$ip_address" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+                if [[ $(echo "$ip_address" | awk -F. '{for (i=1;i<=NF;i++) if ($i>255) exit 1}') ]]; then
+                    echo -e "${RED}Invalid IPv4 address. Values must be between 0 and 255.${NC}"
+                else
+                    break
+                fi
             else
-                break
+                echo -e "${RED}Invalid IPv4 address format.${NC}"
             fi
-        else
-            echo -e "${RED}Invalid IPv4 address format.${NC}"
-        fi
-    done
+        done
+    else
+        while true; do
+            read -p "Enter IPv6 Address: " ip_address
+            # More comprehensive IPv6 validation
+            # Check for valid characters and basic structure
+            if [[ "$ip_address" =~ ^[0-9a-fA-F:]+$ ]] && [[ "$ip_address" == *:* ]] && [[ "$ip_address" != ":::" ]]; then
+                # Remove any subnet mask if present
+                clean_ip="${ip_address%%/*}"
+                
+                # Count colons (should be between 2 and 7 for valid IPv6)
+                colon_count=$(echo "$clean_ip" | tr -cd ':' | wc -c)
+                
+                # Allow :: compression which reduces colon count
+                if [[ "$clean_ip" == *"::"* ]]; then
+                    # With :: compression, minimum 2 colons, maximum 7
+                    if [ "$colon_count" -ge 2 ] && [ "$colon_count" -le 7 ]; then
+                        break
+                    else
+                        echo -e "${RED}Invalid IPv6 address format. Check colon count.${NC}"
+                    fi
+                else
+                    # Without :: compression, should be exactly 7 colons (8 groups)
+                    if [ "$colon_count" -eq 7 ]; then
+                        break
+                    else
+                        echo -e "${RED}Invalid IPv6 address format. Expected 7 colons for full notation.${NC}"
+                    fi
+                fi
+            else
+                echo -e "${RED}Invalid IPv6 address format. Use proper IPv6 notation (e.g., 2001:db8::1).${NC}"
+            fi
+        done
+    fi
     
     # Port
     while true; do
@@ -183,22 +245,40 @@ create_profile() {
         masquerade_flag="--no-masquerade"
     fi
     
-    # Create profile
-    echo -e "${YELLOW}Creating profile...${NC}"
-    if $MANAGER_PATH profile create --id "$profile_id" --name "$profile_name" --ip "$ip_address" --port "$port" --sni "$sni" $masquerade_flag; then
-        echo -e "${GREEN}✓ Profile created successfully!${NC}"
-        
-        # Ask if user wants to start the service
-        read -p "Start the service now? (y/n): " start_service
-        if [[ "$start_service" =~ ^[Yy]$ ]]; then
-            if $MANAGER_PATH service start "$profile_id"; then
-                echo -e "${GREEN}✓ Service started successfully!${NC}"
-            else
-                echo -e "${RED}✗ Failed to start service${NC}"
+    # Create profile with appropriate IP flag
+    echo -e "${YELLOW}Creating profile with $ip_type address...${NC}"
+    if [ "$ip_type" == "ipv6" ]; then
+        if $MANAGER_PATH profile create --id "$profile_id" --name "$profile_name" --ipv6 "$ip_address" --port "$port" --sni "$sni" $masquerade_flag; then
+            echo -e "${GREEN}✓ Profile created successfully!${NC}"
+            
+            # Ask if user wants to start the service
+            read -p "Start the service now? (y/n): " start_service
+            if [[ "$start_service" =~ ^[Yy]$ ]]; then
+                if $MANAGER_PATH service start "$profile_id"; then
+                    echo -e "${GREEN}✓ Service started successfully!${NC}"
+                else
+                    echo -e "${RED}✗ Failed to start service${NC}"
+                fi
             fi
+        else
+            echo -e "${RED}✗ Failed to create profile${NC}"
         fi
     else
-        echo -e "${RED}✗ Failed to create profile${NC}"
+        if $MANAGER_PATH profile create --id "$profile_id" --name "$profile_name" --ip "$ip_address" --port "$port" --sni "$sni" $masquerade_flag; then
+            echo -e "${GREEN}✓ Profile created successfully!${NC}"
+            
+            # Ask if user wants to start the service
+            read -p "Start the service now? (y/n): " start_service
+            if [[ "$start_service" =~ ^[Yy]$ ]]; then
+                if $MANAGER_PATH service start "$profile_id"; then
+                    echo -e "${GREEN}✓ Service started successfully!${NC}"
+                else
+                    echo -e "${RED}✗ Failed to start service${NC}"
+                fi
+            fi
+        else
+            echo -e "${RED}✗ Failed to create profile${NC}"
+        fi
     fi
 }
 
@@ -465,9 +545,27 @@ list_available_ips() {
     echo -e "${CYAN}Available IP Addresses${NC}"
     echo -e "${CYAN}─────────────────────────────────────────────────────────────────${NC}"
     
-    # Get all network interfaces and their IPs
-    ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | sort -u
+    # IPv4 Addresses
+    echo -e "${GREEN}IPv4 Addresses:${NC}"
+    ipv4_addresses=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | sort -u)
+    if [ -n "$ipv4_addresses" ]; then
+        echo "$ipv4_addresses"
+    else
+        echo -e "${YELLOW}No IPv4 addresses found${NC}"
+    fi
     
+    echo ""
+    
+    # IPv6 Addresses
+    echo -e "${GREEN}IPv6 Addresses:${NC}"
+    ipv6_addresses=$(ip -6 addr show | grep -oP '(?<=inet6\s)[0-9a-fA-F:]+(|/[0-9]+)' | grep -v '^::1' | grep -v '^fe80' | sort -u)
+    if [ -n "$ipv6_addresses" ]; then
+        echo "$ipv6_addresses"
+    else
+        echo -e "${YELLOW}No IPv6 addresses found${NC}"
+    fi
+    
+    echo ""
     echo -e "${YELLOW}Note: This shows all configured IPs on the system${NC}"
 }
 
@@ -480,8 +578,19 @@ check_ip_availability() {
         return
     fi
     
+    # Determine IP type
+    if [[ "$ip_address" =~ : ]]; then
+        ip_type="IPv6"
+        ip_check_cmd="ip -6 addr show"
+    else
+        ip_type="IPv4"
+        ip_check_cmd="ip -4 addr show"
+    fi
+    
+    echo -e "${CYAN}Checking $ip_type address: $ip_address${NC}"
+    
     # Check if IP is configured on system
-    if ip addr show | grep -q "$ip_address"; then
+    if $ip_check_cmd | grep -q "$ip_address"; then
         echo -e "${GREEN}✓ IP is configured on system${NC}"
     else
         echo -e "${RED}✗ IP is not configured on system${NC}"
@@ -489,7 +598,14 @@ check_ip_availability() {
     
     # Check if IP is used by any profile
     if [ -d "$CONFIG_DIR" ]; then
-        used_by=$(grep -r "ip_address: $ip_address" "$CONFIG_DIR" 2>/dev/null | cut -d: -f1 | xargs -I{} basename {})
+        # Check both IPv4 and IPv6 fields in profile configs
+        used_by_ipv4=$(grep -r "ip_address: \"$ip_address\"" "$CONFIG_DIR" 2>/dev/null | cut -d: -f1 | xargs -I{} basename {})
+        used_by_ipv6=$(grep -r "ipv6_address: \"$ip_address\"" "$CONFIG_DIR" 2>/dev/null | cut -d: -f1 | xargs -I{} basename {})
+        
+        used_by=""
+        [ -n "$used_by_ipv4" ] && used_by="$used_by_ipv4"
+        [ -n "$used_by_ipv6" ] && used_by="$used_by $used_by_ipv6"
+        
         if [ -n "$used_by" ]; then
             echo -e "${YELLOW}⚠ IP is used by profile(s): $used_by${NC}"
         else

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -86,7 +87,7 @@ func NewProfileRegistry(configDir, dataDir string) (*ProfileRegistry, error) {
 }
 
 // CreateProfile creates a new profile
-func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, port int, sni string) (*Profile, error) {
+func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, ipType string, port int, sni string) (*Profile, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	
@@ -98,6 +99,26 @@ func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, port int, sn
 	// Validate IP address
 	if ipAddress == "" {
 		return nil, fmt.Errorf("IP address cannot be empty")
+	}
+	
+	// Validate IP type and address format
+	if ipType != "ipv4" && ipType != "ipv6" {
+		return nil, fmt.Errorf("invalid IP type: %s (must be 'ipv4' or 'ipv6')", ipType)
+	}
+	
+	// Validate IP address format based on type
+	parsedIP := net.ParseIP(ipAddress)
+	if parsedIP == nil {
+		return nil, fmt.Errorf("invalid IP address format: %s", ipAddress)
+	}
+	
+	// Verify the IP matches the requested type
+	isIPv4 := parsedIP.To4() != nil
+	if ipType == "ipv4" && !isIPv4 {
+		return nil, fmt.Errorf("address %s is not an IPv4 address", ipAddress)
+	}
+	if ipType == "ipv6" && isIPv4 {
+		return nil, fmt.Errorf("address %s is not an IPv6 address", ipAddress)
 	}
 	
 	// Validate port
@@ -114,7 +135,6 @@ func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, port int, sn
 	profile := &Profile{
 		ID:          id,
 		Name:        name,
-		IPAddress:   ipAddress,
 		Port:        port,
 		SNI:         sni,
 		Username:    username,
@@ -129,6 +149,15 @@ func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, port int, sn
 			EnableSpeedTest:   true,
 			CongestionControl: "bbr",
 		},
+	}
+	
+	// Set IP address based on type
+	if ipType == "ipv4" {
+		profile.IPAddress = ipAddress
+		profile.IPv6Address = ""
+	} else {
+		profile.IPAddress = ""
+		profile.IPv6Address = ipAddress
 	}
 	
 	// Create profile directory
