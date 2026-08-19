@@ -83,6 +83,14 @@ func (g *ConfigGenerator) GenerateConfig(data ConfigData, outputPath string) err
 		}
 	}
 	
+	// Set outbound binding
+	if data.OutboundBindIPv4 == "" {
+		data.OutboundBindIPv4 = data.IPAddress
+	}
+	if data.OutboundBindIPv6 == "" && data.IPv6Address != "" {
+		data.OutboundBindIPv6 = data.IPv6Address
+	}
+	
 	// Set outbound binding based on IP type
 	if data.IPv6Address != "" {
 		// IPv6 profile - set IPv6 if not already set
