@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -85,6 +86,33 @@ func NewProfileRegistry(configDir, dataDir string) (*ProfileRegistry, error) {
 	return registry, nil
 }
 
+// validateIPv4 validates an IPv4 address
+func validateIPv4(ip string) error {
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return fmt.Errorf("invalid IP address: %s", ip)
+	}
+	if parsedIP.To4() == nil {
+		return fmt.Errorf("not a valid IPv4 address: %s", ip)
+	}
+	return nil
+}
+
+// validateIPv6 validates an IPv6 address
+func validateIPv6(ip string) error {
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return fmt.Errorf("invalid IP address: %s", ip)
+	}
+	if parsedIP.To4() != nil {
+		return fmt.Errorf("not a valid IPv6 address (appears to be IPv4): %s", ip)
+	}
+	if parsedIP.To16() == nil {
+		return fmt.Errorf("not a valid IPv6 address: %s", ip)
+	}
+	return nil
+}
+
 // CreateProfile creates a new profile
 func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, useIPv6 bool, port int, sni string) (*Profile, error) {
 	r.mu.Lock()
@@ -95,9 +123,19 @@ func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, useIPv6 bool
 		return nil, fmt.Errorf("profile with ID %s already exists", id)
 	}
 	
-	// Validate IP address
+	// Validate IP address based on type
 	if ipAddress == "" {
 		return nil, fmt.Errorf("IP address cannot be empty")
+	}
+	
+	if useIPv6 {
+		if err := validateIPv6(ipAddress); err != nil {
+			return nil, fmt.Errorf("invalid IPv6 address: %w", err)
+		}
+	} else {
+		if err := validateIPv4(ipAddress); err != nil {
+			return nil, fmt.Errorf("invalid IPv4 address: %w", err)
+		}
 	}
 	
 	// Validate port

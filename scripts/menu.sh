@@ -287,6 +287,8 @@ list_profiles() {
     echo -e "${CYAN}─────────────────────────────────────────────────────────────────${NC}"
     
     $MANAGER_PATH profile list
+    echo ""
+    echo -e "${YELLOW}Note: IPv6 addresses are shown in the IP Type column${NC}"
 }
 
 # View profile details
@@ -317,6 +319,8 @@ edit_profile() {
     echo "2. Change SNI"
     echo "3. Enable/Disable Masquerade"
     echo "4. Enable/Disable Speed Test"
+    echo "5. Change IPv4 Address"
+    echo "6. Change IPv6 Address"
     echo "0. Cancel"
     
     read -p "Select option: " edit_choice
@@ -326,6 +330,8 @@ edit_profile() {
         2) change_profile_sni "$profile_id" ;;
         3) toggle_masquerade "$profile_id" ;;
         4) toggle_speedtest "$profile_id" ;;
+        5) change_profile_ipv4 "$profile_id" ;;
+        6) change_profile_ipv6 "$profile_id" ;;
         0) echo "Cancelled" ;;
         *) echo -e "${RED}Invalid option${NC}" ;;
     esac
@@ -546,7 +552,7 @@ list_available_ips() {
     
     # IPv4 Addresses
     echo -e "${GREEN}IPv4 Addresses:${NC}"
-    ipv4_addresses=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | sort -u)
+    ipv4_addresses=$(ip -4 addr show 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | sort -u)
     if [ -n "$ipv4_addresses" ]; then
         echo "$ipv4_addresses"
     else
@@ -555,9 +561,9 @@ list_available_ips() {
     
     echo ""
     
-    # IPv6 Addresses
+    # IPv6 Addresses (excluding link-local and loopback)
     echo -e "${GREEN}IPv6 Addresses:${NC}"
-    ipv6_addresses=$(ip -6 addr show | grep -oP '(?<=inet6\s)[0-9a-fA-F:]+(|/[0-9]+)' | grep -v '^::1' | grep -v '^fe80' | sort -u)
+    ipv6_addresses=$(ip -6 addr show 2>/dev/null | grep -oP '(?<=inet6\s)[0-9a-fA-F:]+(|/[0-9]+)' | grep -v '^::1' | grep -v '^fe80' | sort -u)
     if [ -n "$ipv6_addresses" ]; then
         echo "$ipv6_addresses"
     else
@@ -565,6 +571,7 @@ list_available_ips() {
     fi
     
     echo ""
+    echo -e "${YELLOW}Note: IPv6 link-local (fe80::/10) and loopback (::1) addresses are excluded${NC}"
     echo -e "${YELLOW}Note: This shows all configured IPs on the system${NC}"
 }
 
@@ -589,7 +596,7 @@ check_ip_availability() {
     echo -e "${CYAN}Checking $ip_type address: $ip_address${NC}"
     
     # Check if IP is configured on system
-    if $ip_check_cmd | grep -q "$ip_address"; then
+    if $ip_check_cmd 2>/dev/null | grep -q "$ip_address"; then
         echo -e "${GREEN}✓ IP is configured on system${NC}"
     else
         echo -e "${RED}✗ IP is not configured on system${NC}"
@@ -662,6 +669,54 @@ toggle_speedtest() {
     local profile_id=$1
     echo -e "${YELLOW}Toggle speed test for profile: $profile_id${NC}"
     echo "Implementation pending - requires profile update functionality"
+}
+
+change_profile_ipv4() {
+    local profile_id=$1
+    read -p "Enter new IPv4 Address: " new_ipv4
+    
+    if [[ -z "$new_ipv4" ]]; then
+        echo -e "${RED}IPv4 address cannot be empty${NC}"
+        return
+    fi
+    
+    # Basic IPv4 validation
+    if [[ ! "$new_ipv4" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+        echo -e "${RED}Invalid IPv4 address format${NC}"
+        return
+    fi
+    
+    echo -e "${YELLOW}Changing IPv4 address to $new_ipv4${NC}"
+    if $MANAGER_PATH profile edit "$profile_id" --ip "$new_ipv4"; then
+        echo -e "${GREEN}✓ IPv4 address changed successfully${NC}"
+        echo -e "${YELLOW}Note: This will clear any IPv6 address (single-stack policy)${NC}"
+    else
+        echo -e "${RED}✗ Failed to change IPv4 address${NC}"
+    fi
+}
+
+change_profile_ipv6() {
+    local profile_id=$1
+    read -p "Enter new IPv6 Address: " new_ipv6
+    
+    if [[ -z "$new_ipv6" ]]; then
+        echo -e "${RED}IPv6 address cannot be empty${NC}"
+        return
+    fi
+    
+    # Basic IPv6 validation
+    if [[ ! "$new_ipv6" =~ ^[0-9a-fA-F:]+$ ]] || [[ "$new_ipv6" != *:* ]]; then
+        echo -e "${RED}Invalid IPv6 address format${NC}"
+        return
+    fi
+    
+    echo -e "${YELLOW}Changing IPv6 address to $new_ipv6${NC}"
+    if $MANAGER_PATH profile edit "$profile_id" --ipv6 "$new_ipv6"; then
+        echo -e "${GREEN}✓ IPv6 address changed successfully${NC}"
+        echo -e "${YELLOW}Note: This will clear any IPv4 address (single-stack policy)${NC}"
+    else
+        echo -e "${RED}✗ Failed to change IPv6 address${NC}"
+    fi
 }
 
 # Uninstall Shrapnel

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"text/template"
@@ -257,9 +258,34 @@ WantedBy=multi-user.target
 
 // ValidateConfig validates configuration data
 func ValidateConfig(data ConfigData) error {
-	// Validate IP address
-	if data.IPAddress == "" {
-		return fmt.Errorf("IP address is required")
+	// Validate that at least one IP address is provided
+	if data.IPAddress == "" && data.IPv6Address == "" {
+		return fmt.Errorf("at least one IP address (IPv4 or IPv6) is required")
+	}
+	
+	// Validate IPv4 address if provided
+	if data.IPAddress != "" {
+		parsedIP := net.ParseIP(data.IPAddress)
+		if parsedIP == nil {
+			return fmt.Errorf("invalid IPv4 address: %s", data.IPAddress)
+		}
+		if parsedIP.To4() == nil {
+			return fmt.Errorf("not a valid IPv4 address: %s", data.IPAddress)
+		}
+	}
+	
+	// Validate IPv6 address if provided
+	if data.IPv6Address != "" {
+		parsedIP := net.ParseIP(data.IPv6Address)
+		if parsedIP == nil {
+			return fmt.Errorf("invalid IPv6 address: %s", data.IPv6Address)
+		}
+		if parsedIP.To4() != nil {
+			return fmt.Errorf("not a valid IPv6 address (appears to be IPv4): %s", data.IPv6Address)
+		}
+		if parsedIP.To16() == nil {
+			return fmt.Errorf("not a valid IPv6 address: %s", data.IPv6Address)
+		}
 	}
 	
 	// Validate port

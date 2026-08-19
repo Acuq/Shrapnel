@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -112,6 +113,20 @@ func main() {
 				ipAddress = ipv6
 			}
 			
+			// Validate that at least one IP is provided
+			if ip == "" && ipv6 == "" {
+				logger.Error("Either --ip or --ipv6 must be specified")
+				fmt.Printf("Error: Either --ip or --ipv6 must be specified\n")
+				os.Exit(1)
+			}
+			
+			// Validate that both IPs are not provided at the same time
+			if ip != "" && ipv6 != "" {
+				logger.Error("Cannot specify both --ip and --ipv6")
+				fmt.Printf("Error: Cannot specify both --ip and --ipv6. Please choose one.\n")
+				os.Exit(1)
+			}
+			
 			if err := createProfile(registry, configGenerator, serviceManager, id, name, ipAddress, useIPv6, port, sni, enableMasquerade); err != nil {
 				logger.Error("Failed to create profile", zap.Error(err))
 				fmt.Printf("Error: %v\n", err)
@@ -123,8 +138,8 @@ func main() {
 	}
 	createCmd.Flags().String("id", "", "Profile ID (required)")
 	createCmd.Flags().String("name", "", "Profile name (required)")
-	createCmd.Flags().String("ip", "", "IPv4 address (use --ipv6 for IPv6)")
-	createCmd.Flags().String("ipv6", "", "IPv6 address (use --ip for IPv4)")
+	createCmd.Flags().String("ip", "", "IPv4 address (mutually exclusive with --ipv6)")
+	createCmd.Flags().String("ipv6", "", "IPv6 address (mutually exclusive with --ip)")
 	createCmd.Flags().Int("port", 443, "Port number")
 	createCmd.Flags().String("sni", "bts.com", "SNI")
 	createCmd.Flags().Bool("masquerade", true, "Enable masquerade")
@@ -148,8 +163,10 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			id := args[0]
 			masquerade, _ := cmd.Flags().GetBool("masquerade")
+			newIPv6, _ := cmd.Flags().GetString("ipv6")
+			newIPv4, _ := cmd.Flags().GetString("ip")
 			
-			if err := editProfile(registry, configGenerator, serviceManager, id, masquerade); err != nil {
+			if err := editProfile(registry, configGenerator, serviceManager, id, masquerade, newIPv4, newIPv6); err != nil {
 				logger.Error("Failed to edit profile", zap.Error(err))
 				fmt.Printf("Error: %v\n", err)
 				os.Exit(1)
@@ -158,6 +175,8 @@ func main() {
 		},
 	}
 	editCmd.Flags().Bool("masquerade", false, "Toggle masquerade on/off")
+	editCmd.Flags().String("ipv6", "", "Change IPv6 address")
+	editCmd.Flags().String("ip", "", "Change IPv4 address")
 
 	// Get profile command
 	getCmd := &cobra.Command{
@@ -515,7 +534,7 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 	return nil
 }
 
-func editProfile(registry *profile.ProfileRegistry, generator *config.ConfigGenerator, serviceManager *service.ServiceManager, id string, toggleMasquerade bool) error {
+func editProfile(registry *profile.ProfileRegistry, generator *config.ConfigGenerator, serviceManager *service.ServiceManager, id string, toggleMasquerade bool, newIPv4, newIPv6 string) error {
 	// Get existing profile
 	prof, err := registry.GetProfile(id)
 	if err != nil {
@@ -525,6 +544,29 @@ func editProfile(registry *profile.ProfileRegistry, generator *config.ConfigGene
 	// Update masquerade if requested
 	if toggleMasquerade {
 		prof.Config.EnableMasquerade = !prof.Config.EnableMasquerade
+	}
+	
+	// Update IP addresses if provided
+	if newIPv4 != "" {
+		// Validate IPv4
+		parsedIP := net.ParseIP(newIPv4)
+		if parsedIP == nil || parsedIP.To4() == nil {
+			return fmt.Errorf("invalid IPv4 address: %s", newIPv4)
+		}
+		prof.IPAddress = newIPv4
+		// Clear IPv6 if setting IPv4 (single-stack policy)
+		prof.IPv6Address = ""
+	}
+	
+	if newIPv6 != "" {
+		// Validate IPv6
+		parsedIP := net.ParseIP(newIPv6)
+		if parsedIP == nil || parsedIP.To4() != nil || parsedIP.To16() == nil {
+			return fmt.Errorf("invalid IPv6 address: %s", newIPv6)
+		}
+		prof.IPv6Address = newIPv6
+		// Clear IPv4 if setting IPv6 (single-stack policy)
+		prof.IPAddress = ""
 	}
 	
 	// Determine IP type and format listen address
@@ -573,6 +615,8 @@ func editProfile(registry *profile.ProfileRegistry, generator *config.ConfigGene
 	// Update profile
 	err = registry.UpdateProfile(id, func(p *profile.Profile) error {
 		p.Config.EnableMasquerade = prof.Config.EnableMasquerade
+		p.IPAddress = prof.IPAddress
+		p.IPv6Address = prof.IPv6Address
 		p.UpdatedAt = time.Now()
 		return nil
 	})
@@ -586,7 +630,9 @@ func editProfile(registry *profile.ProfileRegistry, generator *config.ConfigGene
 	
 	logger.Info("Profile edited successfully",
 		zap.String("id", id),
-		zap.Bool("masquerade", prof.Config.EnableMasquerade))
+		zap.Bool("masquerade", prof.Config.EnableMasquerade),
+		zap.String("ipv4", prof.IPAddress),
+		zap.String("ipv6", prof.IPv6Address))
 	
 	return nil
 }
@@ -627,7 +673,8 @@ func getProfile(registry *profile.ProfileRegistry, id string) {
 	fmt.Printf("Profile Details:\n")
 	fmt.Printf("ID: %s\n", prof.ID)
 	fmt.Printf("Name: %s\n", prof.Name)
-	fmt.Printf("IP Address: %s\n", prof.IPAddress)
+	fmt.Printf("IPv4 Address: %s\n", prof.IPAddress)
+	fmt.Printf("IPv6 Address: %s\n", prof.IPv6Address)
 	fmt.Printf("Port: %d\n", prof.Port)
 	fmt.Printf("SNI: %s\n", prof.SNI)
 	fmt.Printf("Status: %s\n", prof.Status)
@@ -1155,7 +1202,8 @@ func runDiagnostics(profileID string) error {
 		
 		fmt.Printf("✅ Profile found: %s\n", prof.ID)
 		fmt.Printf("   Name: %s\n", prof.Name)
-		fmt.Printf("   IP: %s\n", prof.IPAddress)
+		fmt.Printf("   IPv4: %s\n", prof.IPAddress)
+		fmt.Printf("   IPv6: %s\n", prof.IPv6Address)
 		fmt.Printf("   Port: %d\n", prof.Port)
 		fmt.Printf("   SNI: %s\n", prof.SNI)
 		fmt.Printf("   Username: %s\n", prof.Username)
@@ -1449,8 +1497,23 @@ func checkNetworkConfiguration(ip string) error {
 		return fmt.Errorf("IP address is required")
 	}
 	
+	// Determine IP type
+	isIPv6 := strings.Contains(ip, ":")
+	ipType := "IPv4"
+	if isIPv6 {
+		ipType = "IPv6"
+	}
+	
+	fmt.Printf("Checking %s address: %s\n\n", ipType, ip)
+	
 	// Check if IP exists on the system
-	cmd := exec.Command("ip", "addr", "show")
+	var cmd *exec.Cmd
+	if isIPv6 {
+		cmd = exec.Command("ip", "-6", "addr", "show")
+	} else {
+		cmd = exec.Command("ip", "-4", "addr", "show")
+	}
+	
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to get IP addresses: %w", err)
@@ -1464,33 +1527,54 @@ func checkNetworkConfiguration(ip string) error {
 	fmt.Printf("✅ IP %s exists on system\n", ip)
 	
 	// Check if it's a secondary interface
-	if strings.Contains(ipOutput, ip+":") {
-		fmt.Printf("⚠️  IP is on secondary interface (ens3:0)\n")
-	} else {
-		fmt.Printf("✅ IP is on primary interface\n")
+	if strings.Contains(ipOutput, ip+":") || strings.Contains(ipOutput, ip+" ") {
+		if strings.Contains(ipOutput, ip+":") {
+			fmt.Printf("⚠️  IP is on secondary interface\n")
+		} else {
+			fmt.Printf("✅ IP is on primary interface\n")
+		}
 	}
 	
-	// Check ARP table
-	cmd = exec.Command("ip", "neigh", "show")
-	output, err = cmd.CombinedOutput()
-	if err == nil && strings.Contains(string(output), ip) {
-		fmt.Printf("✅ ARP entry exists for %s\n", ip)
+	// For IPv4, check ARP table (IPv6 uses neighbor discovery instead)
+	if !isIPv6 {
+		cmd = exec.Command("ip", "neigh", "show")
+		output, err = cmd.CombinedOutput()
+		if err == nil && strings.Contains(string(output), ip) {
+			fmt.Printf("✅ ARP entry exists for %s\n", ip)
+		} else {
+			fmt.Printf("❌ No ARP entry found for %s\n", ip)
+		}
+		
+		// Check if proxy_arp is enabled
+		cmd = exec.Command("sysctl", "net.ipv4.conf.all.proxy_arp")
+		output, err = cmd.CombinedOutput()
+		if err == nil {
+			fmt.Printf("proxy_arp setting: %s\n", strings.TrimSpace(string(output)))
+		}
 	} else {
-		fmt.Printf("❌ No ARP entry found for %s\n", ip)
-	}
-	
-	// Check if proxy_arp is enabled
-	cmd = exec.Command("sysctl", "net.ipv4.conf.ens3.proxy_arp")
-	output, err = cmd.CombinedOutput()
-	if err == nil {
-		fmt.Printf("proxy_arp setting: %s\n", strings.TrimSpace(string(output)))
+		// For IPv6, check neighbor table
+		cmd = exec.Command("ip", "-6", "neigh", "show")
+		output, err = cmd.CombinedOutput()
+		if err == nil && strings.Contains(string(output), ip) {
+			fmt.Printf("✅ Neighbor entry exists for %s\n", ip)
+		} else {
+			fmt.Printf("❌ No neighbor entry found for %s\n", ip)
+		}
 	}
 	
 	// Check IP forwarding
-	cmd = exec.Command("sysctl", "net.ipv4.ip_forward")
-	output, err = cmd.CombinedOutput()
-	if err == nil {
-		fmt.Printf("IP forwarding: %s\n", strings.TrimSpace(string(output)))
+	if !isIPv6 {
+		cmd = exec.Command("sysctl", "net.ipv4.ip_forward")
+		output, err = cmd.CombinedOutput()
+		if err == nil {
+			fmt.Printf("IPv4 forwarding: %s\n", strings.TrimSpace(string(output)))
+		}
+	} else {
+		cmd = exec.Command("sysctl", "net.ipv6.conf.all.forwarding")
+		output, err = cmd.CombinedOutput()
+		if err == nil {
+			fmt.Printf("IPv6 forwarding: %s\n", strings.TrimSpace(string(output)))
+		}
 	}
 	
 	// Check if anything is listening on the IP
