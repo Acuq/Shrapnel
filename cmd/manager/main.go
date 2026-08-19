@@ -475,7 +475,7 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 	configData := config.ConfigData{
 		Listen:           listenAddr,
 		ProfileID:        id,
-		IPAddress:        ip, // Always set the IP address
+		IPAddress:        func() string { if !useIPv6 { return ip } else { return "" } }(),
 		IPv6Address:     func() string { if useIPv6 { return ip } else { return "" } }(),
 		Port:             port,
 		SNI:              sni,

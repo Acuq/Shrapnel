@@ -74,17 +74,19 @@ func (g *ConfigGenerator) GenerateConfig(data ConfigData, outputPath string) err
 		data.AuthType = "password"
 	}
 	
-	// Generate listen address (IPv6 requires brackets - should be set by caller)
+	// Generate listen address (IPv6 requires brackets)
 	if data.Listen == "" {
 		if data.IPv6Address != "" {
 			data.Listen = fmt.Sprintf("[%s]:%d", data.IPv6Address, data.Port)
-		} else {
+		} else if data.IPAddress != "" {
 			data.Listen = fmt.Sprintf("%s:%d", data.IPAddress, data.Port)
+		} else {
+			return fmt.Errorf("no IP address available for listen address")
 		}
 	}
 	
 	// Set outbound binding
-	if data.OutboundBindIPv4 == "" {
+	if data.OutboundBindIPv4 == "" && data.IPAddress != "" {
 		data.OutboundBindIPv4 = data.IPAddress
 	}
 	if data.OutboundBindIPv6 == "" && data.IPv6Address != "" {
