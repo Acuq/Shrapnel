@@ -94,6 +94,7 @@ func main() {
 			id, _ := cmd.Flags().GetString("id")
 			name, _ := cmd.Flags().GetString("name")
 			ip, _ := cmd.Flags().GetString("ip")
+			ipv6, _ := cmd.Flags().GetString("ipv6")
 			port, _ := cmd.Flags().GetInt("port")
 			sni, _ := cmd.Flags().GetString("sni")
 			enableMasquerade, _ := cmd.Flags().GetBool("masquerade")
@@ -104,7 +105,14 @@ func main() {
 				enableMasquerade = false
 			}
 			
-			if err := createProfile(registry, configGenerator, serviceManager, id, name, ip, port, sni, enableMasquerade); err != nil {
+			// Determine if IPv4 or IPv6
+			useIPv6 := ipv6 != ""
+			ipAddress := ip
+			if useIPv6 {
+				ipAddress = ipv6
+			}
+			
+			if err := createProfile(registry, configGenerator, serviceManager, id, name, ipAddress, useIPv6, port, sni, enableMasquerade); err != nil {
 				logger.Error("Failed to create profile", zap.Error(err))
 				fmt.Printf("Error: %v\n", err)
 				os.Exit(1)
@@ -115,14 +123,14 @@ func main() {
 	}
 	createCmd.Flags().String("id", "", "Profile ID (required)")
 	createCmd.Flags().String("name", "", "Profile name (required)")
-	createCmd.Flags().String("ip", "", "IP address (required)")
+	createCmd.Flags().String("ip", "", "IPv4 address (use --ipv6 for IPv6)")
+	createCmd.Flags().String("ipv6", "", "IPv6 address (use --ip for IPv4)")
 	createCmd.Flags().Int("port", 443, "Port number")
 	createCmd.Flags().String("sni", "bts.com", "SNI")
 	createCmd.Flags().Bool("masquerade", true, "Enable masquerade")
 	createCmd.Flags().Bool("no-masquerade", false, "Disable masquerade")
 	createCmd.MarkFlagRequired("id")
 	createCmd.MarkFlagRequired("name")
-	createCmd.MarkFlagRequired("ip")
 
 	// List profiles command
 	listCmd := &cobra.Command{
@@ -440,9 +448,9 @@ func main() {
 	}
 }
 
-func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGenerator, serviceManager *service.ServiceManager, id, name, ip string, port int, sni string, enableMasquerade bool) error {
+func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGenerator, serviceManager *service.ServiceManager, id, name, ip string, useIPv6 bool, port int, sni string, enableMasquerade bool) error {
 	// Create profile
-	prof, err := registry.CreateProfile(id, name, ip, port, sni)
+	prof, err := registry.CreateProfile(id, name, ip, useIPv6, port, sni)
 	if err != nil {
 		return fmt.Errorf("failed to create profile: %w", err)
 	}
@@ -456,10 +464,19 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 	}
 
 	// Generate configuration with profile credentials (Blitz-style)
+	// Format listen address - IPv6 requires brackets
+	var listenAddr string
+	if useIPv6 {
+		listenAddr = fmt.Sprintf("[%s]:%d", ip, port)
+	} else {
+		listenAddr = fmt.Sprintf("%s:%d", ip, port)
+	}
+	
 	configData := config.ConfigData{
-		Listen:           fmt.Sprintf("%s:%d", ip, port), // Bind to specific IP for multi-IP support
+		Listen:           listenAddr,
 		ProfileID:        id,
 		IPAddress:        ip,
+		IPv6Address:     func() string { if useIPv6 { return ip } else { return "" } }(),
 		Port:             port,
 		SNI:              sni,
 		CertFile:         certFile,
@@ -473,6 +490,8 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 		CongestionControl: prof.Config.CongestionControl,
 		EnableSpeedTest:  prof.Config.EnableSpeedTest,
 		EnableMasquerade: enableMasquerade, // Use the parameter
+		OutboundBindIPv4: func() string { if !useIPv6 { return ip } else { return "" } }(),
+		OutboundBindIPv6: func() string { if useIPv6 { return ip } else { return "" } }(),
 	}
 
 	configPath := registry.GetProfileConfigPath(id)
@@ -488,6 +507,7 @@ func createProfile(registry *profile.ProfileRegistry, generator *config.ConfigGe
 	logger.Info("Profile created successfully", 
 		zap.String("id", id), 
 		zap.String("ip", ip), 
+		zap.Bool("ipv6", useIPv6),
 		zap.Int("port", port),
 		zap.String("username", prof.Username),
 		zap.String("password", prof.Password))
@@ -507,14 +527,30 @@ func editProfile(registry *profile.ProfileRegistry, generator *config.ConfigGene
 		prof.Config.EnableMasquerade = !prof.Config.EnableMasquerade
 	}
 	
+	// Determine IP type and format listen address
+	var listenAddr string
+	var useIPv6 bool
+	var ipAddress string
+	
+	if prof.IPv6Address != "" {
+		useIPv6 = true
+		ipAddress = prof.IPv6Address
+		listenAddr = fmt.Sprintf("[%s]:%d", prof.IPv6Address, prof.Port)
+	} else {
+		useIPv6 = false
+		ipAddress = prof.IPAddress
+		listenAddr = fmt.Sprintf("%s:%d", prof.IPAddress, prof.Port)
+	}
+	
 	// Regenerate configuration
 	certFile := filepath.Join(registry.GetProfileDirectory(id), "cert.pem")
 	keyFile := filepath.Join(registry.GetProfileDirectory(id), "key.pem")
 	
 	configData := config.ConfigData{
-		Listen:           fmt.Sprintf("%s:%d", prof.IPAddress, prof.Port), // Bind to specific IP for multi-IP support
+		Listen:           listenAddr,
 		ProfileID:        id,
 		IPAddress:        prof.IPAddress,
+		IPv6Address:     prof.IPv6Address,
 		Port:             prof.Port,
 		SNI:              prof.SNI,
 		CertFile:         certFile,
@@ -528,6 +564,8 @@ func editProfile(registry *profile.ProfileRegistry, generator *config.ConfigGene
 		CongestionControl: prof.Config.CongestionControl,
 		EnableSpeedTest:  prof.Config.EnableSpeedTest,
 		EnableMasquerade: prof.Config.EnableMasquerade,
+		OutboundBindIPv4: func() string { if !useIPv6 { return prof.IPAddress } else { return "" } }(),
+		OutboundBindIPv6: func() string { if useIPv6 { return prof.IPv6Address } else { return "" } }(),
 	}
 	
 	configPath := registry.GetProfileConfigPath(id)
@@ -565,12 +603,20 @@ func listProfiles(registry *profile.ProfileRegistry) {
 	}
 
 	fmt.Println("Profiles:")
-	fmt.Println("ID\tName\tIP\tPort\tStatus")
-	fmt.Println("--\t----\t--\t----\t------")
+	fmt.Println("ID\tName\tIP Type\tIP Address\tPort\tStatus")
+	fmt.Println("--\t----\t-------\t-----------\t----\t------")
 	
 	for _, prof := range profiles {
-		fmt.Printf("%s\t%s\t%s\t%d\t%s\n", 
-			prof.ID, prof.Name, prof.IPAddress, prof.Port, prof.Status)
+		var ipType, ipAddress string
+		if prof.IPv6Address != "" {
+			ipType = "IPv6"
+			ipAddress = prof.IPv6Address
+		} else {
+			ipType = "IPv4"
+			ipAddress = prof.IPAddress
+		}
+		fmt.Printf("%s\t%s\t%s\t%s\t%d\t%s\n", 
+			prof.ID, prof.Name, ipType, ipAddress, prof.Port, prof.Status)
 	}
 }
 
@@ -907,6 +953,25 @@ func generateUserURI(profileID, username string, showQR, withSHA256 bool) error 
 }
 
 func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
+	// Determine IP address and type for URI formatting
+	ipAddress := prof.IPAddress
+	ipType := "IPv4"
+	uriFragment := "#IPv4"
+	
+	if prof.IPv6Address != "" {
+		ipAddress = prof.IPv6Address
+		ipType = "IPv6"
+		uriFragment = "#IPv6"
+	}
+	
+	// Format IP address for URI (IPv6 requires brackets)
+	var formattedIP string
+	if ipType == "IPv6" {
+		formattedIP = fmt.Sprintf("[%s]", ipAddress)
+	} else {
+		formattedIP = ipAddress
+	}
+	
 	// Build URI parameters with obfs (Blitz-style) using profile's obfs password
 	// Don't include insecure when using SHA256 pin
 	if withSHA256 {
@@ -920,19 +985,21 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 		uriParams += "&pinSHA256=" + sha256Pin
 		
 		// Server uses userpass auth -> URI auth component must be username:password
-		uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s#IPv4",
+		uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s%s",
 			prof.Username,
 			prof.Password,
-			prof.IPAddress,
+			formattedIP,
 			prof.Port,
-			uriParams)
+			uriParams,
+			uriFragment)
 		
 		fmt.Println("========================================")
 		fmt.Printf("Connection URI for Profile: %s\n", prof.ID)
 		fmt.Println("========================================")
 		fmt.Printf("Name: %s\n", prof.Name)
 		fmt.Printf("Password: %s\n", prof.Password)
-		fmt.Printf("IP: %s\n", prof.IPAddress)
+		fmt.Printf("IP Type: %s\n", ipType)
+		fmt.Printf("IP: %s\n", ipAddress)
 		fmt.Printf("Port: %d\n", prof.Port)
 		fmt.Printf("SNI: %s\n", prof.SNI)
 		fmt.Printf("Obfs Password: %s\n", prof.ObfsPassword)
@@ -956,7 +1023,8 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 		
 		logger.Info("Profile URI generated successfully",
 			zap.String("profile", prof.ID),
-			zap.String("username", prof.Username))
+			zap.String("username", prof.Username),
+			zap.String("ip_type", ipType))
 		
 		return nil
 	}
@@ -966,19 +1034,21 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 		prof.ObfsPassword, prof.SNI)
 	
 	// Server uses userpass auth -> URI auth component must be username:password
-	uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s#IPv4",
+	uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s%s",
 		prof.Username,
 		prof.Password,
-		prof.IPAddress,
+		formattedIP,
 		prof.Port,
-		uriParams)
+		uriParams,
+		uriFragment)
 	
 	fmt.Println("========================================")
 	fmt.Printf("Connection URI for Profile: %s\n", prof.ID)
 	fmt.Println("========================================")
 	fmt.Printf("Name: %s\n", prof.Name)
 	fmt.Printf("Password: %s\n", prof.Password)
-	fmt.Printf("IP: %s\n", prof.IPAddress)
+	fmt.Printf("IP Type: %s\n", ipType)
+	fmt.Printf("IP: %s\n", ipAddress)
 	fmt.Printf("Port: %d\n", prof.Port)
 	fmt.Printf("SNI: %s\n", prof.SNI)
 	fmt.Printf("Obfs Password: %s\n", prof.ObfsPassword)
@@ -1001,7 +1071,8 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 	
 	logger.Info("Profile URI generated successfully",
 		zap.String("profile", prof.ID),
-		zap.String("username", prof.Username))
+		zap.String("username", prof.Username),
+		zap.String("ip_type", ipType))
 	
 	return nil
 }

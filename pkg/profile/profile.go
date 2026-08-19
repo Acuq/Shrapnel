@@ -86,7 +86,7 @@ func NewProfileRegistry(configDir, dataDir string) (*ProfileRegistry, error) {
 }
 
 // CreateProfile creates a new profile
-func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, port int, sni string) (*Profile, error) {
+func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, useIPv6 bool, port int, sni string) (*Profile, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	
@@ -114,7 +114,6 @@ func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, port int, sn
 	profile := &Profile{
 		ID:          id,
 		Name:        name,
-		IPAddress:   ipAddress,
 		Port:        port,
 		SNI:         sni,
 		Username:    username,
@@ -129,6 +128,15 @@ func (r *ProfileRegistry) CreateProfile(id, name, ipAddress string, port int, sn
 			EnableSpeedTest:   true,
 			CongestionControl: "bbr",
 		},
+	}
+	
+	// Set IP address based on type
+	if useIPv6 {
+		profile.IPv6Address = ipAddress
+		profile.IPAddress = "" // Clear IPv4 for IPv6-only profiles
+	} else {
+		profile.IPAddress = ipAddress
+		profile.IPv6Address = "" // Clear IPv6 for IPv4-only profiles
 	}
 	
 	// Create profile directory
