@@ -85,17 +85,19 @@ func (g *ConfigGenerator) GenerateConfig(data ConfigData, outputPath string) err
 	
 	// Set outbound binding based on IP type
 	if data.IPv6Address != "" {
-		// IPv6 profile - clear IPv4, set IPv6 if not already set
+		// IPv6 profile - set IPv6 if not already set
 		if data.OutboundBindIPv6 == "" {
 			data.OutboundBindIPv6 = data.IPv6Address
 		}
-		data.OutboundBindIPv4 = "" // Ensure no IPv4 binding for IPv6-only
-	} else {
-		// IPv4 profile - clear IPv6, set IPv4 if not already set
+		// Keep IPv4 binding for compatibility
 		if data.OutboundBindIPv4 == "" {
 			data.OutboundBindIPv4 = data.IPAddress
 		}
-		data.OutboundBindIPv6 = "" // Ensure no IPv6 binding for IPv4-only
+	} else {
+		// IPv4 profile - original logic
+		if data.OutboundBindIPv4 == "" {
+			data.OutboundBindIPv4 = data.IPAddress
+		}
 	}
 	
 	// Generate stats port if not set

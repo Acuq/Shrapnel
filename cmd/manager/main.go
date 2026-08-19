@@ -982,13 +982,12 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 		uriParams += "&pinSHA256=" + sha256Pin
 		
 		// Server uses userpass auth -> URI auth component must be username:password
-		uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s%s",
+		uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s#IPv4",
 			prof.Username,
 			prof.Password,
 			formattedIP,
 			prof.Port,
-			uriParams,
-			uriFragment)
+			uriParams)
 		
 		fmt.Println("========================================")
 		fmt.Printf("Connection URI for Profile: %s\n", prof.ID)
@@ -1031,13 +1030,12 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 		prof.ObfsPassword, prof.SNI)
 	
 	// Server uses userpass auth -> URI auth component must be username:password
-	uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s%s",
+	uri := fmt.Sprintf("hy2://%s:%s@%s:%d?%s#IPv4",
 		prof.Username,
 		prof.Password,
 		formattedIP,
 		prof.Port,
-		uriParams,
-		uriFragment)
+		uriParams)
 	
 	fmt.Println("========================================")
 	fmt.Printf("Connection URI for Profile: %s\n", prof.ID)
