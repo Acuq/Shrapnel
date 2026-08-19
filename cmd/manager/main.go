@@ -530,15 +530,12 @@ func editProfile(registry *profile.ProfileRegistry, generator *config.ConfigGene
 	// Determine IP type and format listen address
 	var listenAddr string
 	var useIPv6 bool
-	var ipAddress string
 	
 	if prof.IPv6Address != "" {
 		useIPv6 = true
-		ipAddress = prof.IPv6Address
 		listenAddr = fmt.Sprintf("[%s]:%d", prof.IPv6Address, prof.Port)
 	} else {
 		useIPv6 = false
-		ipAddress = prof.IPAddress
 		listenAddr = fmt.Sprintf("%s:%d", prof.IPAddress, prof.Port)
 	}
 	
