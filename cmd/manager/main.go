@@ -953,12 +953,10 @@ func generateProfileURI(prof *profile.Profile, showQR, withSHA256 bool) error {
 	// Determine IP address and type for URI formatting
 	ipAddress := prof.IPAddress
 	ipType := "IPv4"
-	uriFragment := "#IPv4"
 	
 	if prof.IPv6Address != "" {
 		ipAddress = prof.IPv6Address
 		ipType = "IPv6"
-		uriFragment = "#IPv6"
 	}
 	
 	// Format IP address for URI (IPv6 requires brackets)
